@@ -320,7 +320,6 @@ OptionsVideoState::OptionsVideoState(OptionsOrigin origin) : OptionsBaseState(or
 	_cbxBattleScale->onMouseIn((ActionHandler)&OptionsVideoState::txtTooltipIn);
 	_cbxBattleScale->onMouseOut((ActionHandler)&OptionsVideoState::txtTooltipOut);
 
-	_cbxScalingMode->setColor(Palette::blockOffset(15) - 1);
 	_cbxScalingMode->setOptions(scalemodes);
 	_cbxScalingMode->setSelected(Options::scalingMode);
 	_cbxScalingMode->setTooltip("STR_SCALE_MODE_DESC");
