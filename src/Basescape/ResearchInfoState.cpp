@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -19,23 +19,20 @@
 #include "ResearchInfoState.h"
 #include "../Engine/Action.h"
 #include "../Engine/Game.h"
-#include "../Resource/ResourcePack.h"
-#include "../Engine/Language.h"
-#include "../Engine/Palette.h"
+#include "../Mod/Mod.h"
+#include "../Engine/LocalizedText.h"
 #include "../Engine/Options.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/Window.h"
 #include "../Interface/Text.h"
 #include "../Savegame/Base.h"
-#include "../Ruleset/RuleResearch.h"
-#include "../Ruleset/Ruleset.h"
+#include "../Mod/RuleResearch.h"
 #include "../Savegame/ItemContainer.h"
 #include "../Savegame/ResearchProject.h"
 #include "../Interface/ArrowButton.h"
 #include "../Engine/Timer.h"
 #include "../Engine/RNG.h"
-#include <sstream>
-#include <limits>
+#include <climits>
 
 namespace OpenXcom
 {
@@ -46,7 +43,7 @@ namespace OpenXcom
  * @param base Pointer to the base to get info from.
  * @param rule A RuleResearch which will be used to create a new ResearchProject
  */
-ResearchInfoState::ResearchInfoState(Base *base, RuleResearch * rule) : _base(base), _project(new ResearchProject(rule, int(rule->getCost() * OpenXcom::RNG::generate(50, 150)/100))), _rule(rule)
+ResearchInfoState::ResearchInfoState(Base *base, RuleResearch *rule) : _base(base), _project(new ResearchProject(rule, int(rule->getCost() * OpenXcom::RNG::generate(50, 150)/100))), _rule(rule)
 {
 	buildUi();
 }
@@ -57,7 +54,7 @@ ResearchInfoState::ResearchInfoState(Base *base, RuleResearch * rule) : _base(ba
  * @param base Pointer to the base to get info from.
  * @param project A ResearchProject to modify
  */
-ResearchInfoState::ResearchInfoState(Base *base, ResearchProject * project) : _base(base), _project(project), _rule(0)
+ResearchInfoState::ResearchInfoState(Base *base, ResearchProject *project) : _base(base), _project(project), _rule(0)
 {
 	buildUi();
 }
@@ -87,46 +84,34 @@ void ResearchInfoState::buildUi()
 	_surfaceScientists->onMouseClick((ActionHandler)&ResearchInfoState::handleWheel, 0);
 
 	// Set palette
-	setPalette("PAL_BASESCAPE", 1);
+	setInterface("allocateResearch");
 
 	add(_surfaceScientists);
-	add(_window);
-	add(_btnOk);
-	add(_btnCancel);
-	add(_txtTitle);
-	add(_txtAvailableScientist);
-	add(_txtAvailableSpace);
-	add(_txtAllocatedScientist);
-	add(_txtMore);
-	add(_txtLess);
-	add(_btnMore);
-	add(_btnLess);
+	add(_window, "window", "allocateResearch");
+	add(_btnOk, "button2", "allocateResearch");
+	add(_btnCancel, "button2", "allocateResearch");
+	add(_txtTitle, "text", "allocateResearch");
+	add(_txtAvailableScientist, "text", "allocateResearch");
+	add(_txtAvailableSpace, "text", "allocateResearch");
+	add(_txtAllocatedScientist, "text", "allocateResearch");
+	add(_txtMore, "text", "allocateResearch");
+	add(_txtLess, "text", "allocateResearch");
+	add(_btnMore, "button1", "allocateResearch");
+	add(_btnLess, "button1", "allocateResearch");
 
 	centerAllSurfaces();
 
 	// Set up objects
-	_window->setColor(Palette::blockOffset(13)+5);
-	_window->setBackground(_game->getResourcePack()->getSurface("BACK05.SCR"));
-	_txtTitle->setColor(Palette::blockOffset(13)+5);
+	_window->setBackground(_game->getMod()->getSurface("BACK05.SCR"));
+
 	_txtTitle->setBig();
 
-	_txtTitle->setText(_rule ? tr(_rule->getName()) : tr(_project->getRules ()->getName()));
+	_txtTitle->setText(_rule ? tr(_rule->getName()) : tr(_project->getRules()->getName()));
 
-	_txtAvailableScientist->setColor(Palette::blockOffset(13)+5);
-	_txtAvailableScientist->setSecondaryColor(Palette::blockOffset(13));
-
-	_txtAvailableSpace->setColor(Palette::blockOffset(13)+5);
-	_txtAvailableSpace->setSecondaryColor(Palette::blockOffset(13));
-
-	_txtAllocatedScientist->setColor(Palette::blockOffset(13)+5);
-	_txtAllocatedScientist->setSecondaryColor(Palette::blockOffset(13));
 	_txtAllocatedScientist->setBig();
 
 	_txtMore->setText(tr("STR_INCREASE"));
 	_txtLess->setText(tr("STR_DECREASE"));
-
-	_txtMore->setColor(Palette::blockOffset(13)+5);
-	_txtLess->setColor(Palette::blockOffset(13)+5);
 
 	_txtMore->setBig();
 	_txtLess->setBig();
@@ -134,16 +119,12 @@ void ResearchInfoState::buildUi()
 	if (_rule)
 	{
 		_base->addResearch(_project);
-		if (_rule->needItem() &&
-				(_game->getRuleset()->getUnit(_rule->getName()) ||
-				 Options::spendResearchedItems))
+		if (_rule->needItem() && _rule->destroyItem())
 		{
-			_base->getItems()->removeItem(_rule->getName(), 1);
+			_base->getStorageItems()->removeItem(_rule->getName(), 1);
 		}
 	}
 	setAssignedScientist();
-	_btnMore->setColor(Palette::blockOffset(13)+5);
-	_btnLess->setColor(Palette::blockOffset(13)+5);
 	_btnMore->onMousePress((ActionHandler)&ResearchInfoState::morePress);
 	_btnMore->onMouseRelease((ActionHandler)&ResearchInfoState::moreRelease);
 	_btnMore->onMouseClick((ActionHandler)&ResearchInfoState::moreClick, 0);
@@ -156,10 +137,8 @@ void ResearchInfoState::buildUi()
 	_timerLess = new Timer(250);
 	_timerLess->onTimer((StateHandler)&ResearchInfoState::less);
 
-	_btnOk->setColor(Palette::blockOffset(13)+10);
 	_btnOk->onMouseClick((ActionHandler)&ResearchInfoState::btnOkClick);
 	_btnOk->onKeyboardPress((ActionHandler)&ResearchInfoState::btnOkClick, Options::keyOk);
-	_btnCancel->setColor(Palette::blockOffset(13)+10);
 	if (_rule)
 	{
 		_btnOk->setText(tr("STR_START_PROJECT"));
@@ -173,6 +152,15 @@ void ResearchInfoState::buildUi()
 		_btnOk->onKeyboardPress((ActionHandler)&ResearchInfoState::btnOkClick, Options::keyCancel);
 	}
 	_btnCancel->onMouseClick((ActionHandler)&ResearchInfoState::btnCancelClick);
+}
+
+/**
+ * Frees up memory that's not automatically cleaned on exit
+ */
+ResearchInfoState::~ResearchInfoState()
+{
+	delete _timerLess;
+	delete _timerMore;
 }
 
 /**
@@ -192,11 +180,9 @@ void ResearchInfoState::btnOkClick(Action *)
 void ResearchInfoState::btnCancelClick(Action *)
 {
 	const RuleResearch *ruleResearch = _rule ? _rule : _project->getRules();
-	if (ruleResearch->needItem() &&
-			(_game->getRuleset()->getUnit(ruleResearch->getName()) ||
-			 Options::spendResearchedItems))
+	if (ruleResearch->needItem() && ruleResearch->destroyItem())
 	{
-		_base->getItems()->addItem(ruleResearch->getName(), 1);
+		_base->getStorageItems()->addItem(ruleResearch->getName(), 1);
 	}
 	_base->removeResearch(_project);
 	_game->popState();
@@ -252,7 +238,7 @@ void ResearchInfoState::moreRelease(Action *action)
 void ResearchInfoState::moreClick(Action *action)
 {
 	if (action->getDetails()->button.button == SDL_BUTTON_RIGHT)
-		moreByValue(std::numeric_limits<int>::max());
+		moreByValue(INT_MAX);
 	if (action->getDetails()->button.button == SDL_BUTTON_LEFT)
 		moreByValue(1);
 }
@@ -263,7 +249,7 @@ void ResearchInfoState::moreClick(Action *action)
  */
 void ResearchInfoState::lessPress(Action *action)
 {
-	if (action->getDetails()->button.button == SDL_BUTTON_LEFT) _timerLess->start ();
+	if (action->getDetails()->button.button == SDL_BUTTON_LEFT) _timerLess->start();
 }
 
 /**
@@ -275,7 +261,7 @@ void ResearchInfoState::lessRelease(Action *action)
 	if (action->getDetails()->button.button == SDL_BUTTON_LEFT)
 	{
 		_timerLess->setInterval(250);
-		_timerLess->stop ();
+		_timerLess->stop();
 	}
 }
 
@@ -287,7 +273,7 @@ void ResearchInfoState::lessRelease(Action *action)
 void ResearchInfoState::lessClick(Action *action)
 {
 	if (action->getDetails()->button.button == SDL_BUTTON_RIGHT)
-		lessByValue(std::numeric_limits<int>::max());
+		lessByValue(INT_MAX);
 	if (action->getDetails()->button.button == SDL_BUTTON_LEFT)
 		lessByValue(1);
 }
@@ -355,4 +341,5 @@ void ResearchInfoState::think()
 	_timerLess->think (this, 0);
 	_timerMore->think (this, 0);
 }
+
 }

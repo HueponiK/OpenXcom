@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,10 +17,10 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "Game.h"
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include <SDL_mixer.h>
-#include "Adlib/adlplayer.h"
 #include "State.h"
 #include "Screen.h"
 #include "Sound.h"
@@ -29,15 +29,14 @@
 #include "Logger.h"
 #include "../Interface/Cursor.h"
 #include "../Interface/FpsCounter.h"
-#include "../Resource/ResourcePack.h"
-#include "../Ruleset/Ruleset.h"
+#include "../Mod/Mod.h"
 #include "../Savegame/SavedGame.h"
-#include "Palette.h"
+#include "../Savegame/SavedBattleGame.h"
 #include "Action.h"
 #include "Exception.h"
-#include "InteractiveSurface.h"
 #include "Options.h"
 #include "CrossPlatform.h"
+#include "FileMap.h"
 #include "../Menu/TestState.h"
 
 namespace OpenXcom
@@ -50,7 +49,7 @@ const double Game::VOLUME_GRADIENT = 10.0;
  * creates the display screen and sets up the cursor.
  * @param title Title of the game window.
  */
-Game::Game(const std::string &title) : _screen(0), _cursor(0), _lang(0), _states(), _deleted(), _res(0), _save(0), _rules(0), _quit(false), _init(false), _mouseActive(true), _timeUntilNextFrame(0)
+Game::Game(const std::string &title) : _screen(0), _cursor(0), _lang(0), _save(0), _mod(0), _quit(false), _init(false), _mouseActive(true), _timeUntilNextFrame(0)
 {
 	Options::reload = false;
 	Options::mute = false;
@@ -78,7 +77,7 @@ Game::Game(const std::string &title) : _screen(0), _cursor(0), _lang(0), _states
 	SDL_WM_GrabInput(Options::captureMouse);
 	
 	// Set the window icon
-	CrossPlatform::setWindowIcon(103, "openxcom.png");
+	CrossPlatform::setWindowIcon(103, FileMap::getFilePath("openxcom.png"));
 
 	// Set the window caption
 	SDL_WM_SetCaption(title.c_str(), 0);
@@ -90,7 +89,6 @@ Game::Game(const std::string &title) : _screen(0), _cursor(0), _lang(0), _states
 
 	// Create cursor
 	_cursor = new Cursor(9, 13);
-	_cursor->setColor(Palette::blockOffset(15)+12);
 	
 	// Create invisible hardware cursor to workaround bug with absolute positioning pointing devices
 	SDL_ShowCursor(SDL_ENABLE);
@@ -123,9 +121,8 @@ Game::~Game()
 
 	delete _cursor;
 	delete _lang;
-	delete _res;
 	delete _save;
-	delete _rules;
+	delete _mod;
 	delete _screen;
 	delete _fpsCounter;
 
@@ -239,7 +236,6 @@ void Game::run()
 					_screen->handle(&action);
 					_cursor->handle(&action);
 					_fpsCounter->handle(&action);
-					_states.back()->handle(&action);
 					if (action.getDetails()->type == SDL_KEYDOWN)
 					{
 						// "ctrl-g" grab input
@@ -262,6 +258,7 @@ void Game::run()
 							}
 						}
 					}
+					_states.back()->handle(&action);
 					break;
 			}
 		}
@@ -286,7 +283,7 @@ void Game::run()
 
 			if (_init && _timeUntilNextFrame <= 0)
 			{
-				// make a note of when this frame update occured.
+				// make a note of when this frame update occurred.
 				_timeOfLastFrame = SDL_GetTicks();
 				_fpsCounter->addFrame();
 				_screen->clear();
@@ -295,7 +292,7 @@ void Game::run()
 				{
 					--i;
 				}
-				while(i != _states.begin() && !(*i)->isScreen());
+				while (i != _states.begin() && !(*i)->isScreen());
 
 				for (; i != _states.end(); ++i)
 				{
@@ -350,6 +347,15 @@ void Game::setVolume(int sound, int music, int ui)
 		{
 			sound = volumeExponent(sound) * (double)SDL_MIX_MAXVOLUME;
 			Mix_Volume(-1, sound);
+			if (_save && _save->getSavedBattle())
+			{
+				Mix_Volume(3, sound * _save->getSavedBattle()->getAmbientVolume());
+			}
+			else
+			{
+				// channel 3: reserved for ambient sound effect.
+				Mix_Volume(3, sound / 2);
+			}
 		}
 		if (music >= 0)
 		{
@@ -369,6 +375,7 @@ double Game::volumeExponent(int volume)
 {
 	return (exp(log(Game::VOLUME_GRADIENT + 1.0) * volume / (double)SDL_MIX_MAXVOLUME) -1.0 ) / Game::VOLUME_GRADIENT;
 }
+
 /**
  * Returns the display screen used by the game.
  * @return Pointer to the screen.
@@ -446,59 +453,47 @@ Language *Game::getLanguage() const
 }
 
 /**
-* Changes the language currently in use by the game.
-* @param filename Filename of the language file.
-*/
+ * Changes the language currently in use by the game.
+ * @param filename Filename of the language file.
+ */
 void Game::loadLanguage(const std::string &filename)
 {
 	std::ostringstream ss;
-	ss << "Language/" << filename << ".yml";
+	ss << "/Language/" << filename << ".yml";
+	std::string path = CrossPlatform::searchDataFile("common" + ss.str());
+	try
+	{
+		_lang->load(path);
+	}
+	catch (YAML::Exception &e)
+	{
+		throw Exception(path + ": " + std::string(e.what()));
+	}
+
+	for (std::vector< std::pair<std::string, bool> >::const_iterator i = Options::mods.begin(); i != Options::mods.end(); ++i)
+	{
+		if (i->second)
+		{
+			std::string modId = i->first;
+			ModInfo modInfo = Options::getModInfos().find(modId)->second;
+			std::string file = modInfo.getPath() + ss.str();
+			if (CrossPlatform::fileExists(file))
+			{
+				_lang->load(file);
+			}
+		}
+	}
 
 	ExtraStrings *strings = 0;
-	std::map<std::string, ExtraStrings *> extraStrings = _rules->getExtraStrings();
+	std::map<std::string, ExtraStrings *> extraStrings = _mod->getExtraStrings();
 	if (!extraStrings.empty())
 	{
 		if (extraStrings.find(filename) != extraStrings.end())
 		{
 			strings = extraStrings[filename];
 		}
-		// Fallback
-		else if (extraStrings.find("en-US") != extraStrings.end())
-		{
-			strings = extraStrings["en-US"];
-		}
-		else if (extraStrings.find("en-GB") != extraStrings.end())
-		{
-			strings = extraStrings["en-GB"];
-		}
-		else
-		{
-			strings = extraStrings.begin()->second;
-		}
 	}
-
-	_lang->load(CrossPlatform::getDataFile(ss.str()), strings);
-
-	Options::language = filename;
-}
-
-/**
- * Returns the resource pack currently in use by the game.
- * @return Pointer to the resource pack.
- */
-ResourcePack *Game::getResourcePack() const
-{
-	return _res;
-}
-
-/**
- * Sets a new resource pack for the game to use.
- * @param res Pointer to the resource pack.
- */
-void Game::setResourcePack(ResourcePack *res)
-{
-	delete _res;
-	_res = res;
+	_lang->load(strings);
 }
 
 /**
@@ -521,45 +516,23 @@ void Game::setSavedGame(SavedGame *save)
 }
 
 /**
- * Returns the ruleset currently in use by the game.
- * @return Pointer to the ruleset.
+ * Returns the mod currently in use by the game.
+ * @return Pointer to the mod.
  */
-Ruleset *Game::getRuleset() const
+Mod *Game::getMod() const
 {
-	return _rules;
+	return _mod;
 }
 
 /**
- * Loads the rulesets specified in the game options.
+ * Loads the mods specified in the game options.
  */
-void Game::loadRuleset()
+void Game::loadMods()
 {
-	Options::badMods.clear();
-	_rules = new Ruleset();
-	if (Options::rulesets.empty())
-	{
-		Options::rulesets.push_back("Xcom1Ruleset");
-	}
-	for (std::vector<std::string>::iterator i = Options::rulesets.begin(); i != Options::rulesets.end();)
-	{
-		try
-		{
-			_rules->load(*i);
-			++i;
-		}
-		catch (YAML::Exception &e)
-		{
-			Log(LOG_WARNING) << e.what();
-			Options::badMods.push_back(*i);
-			Options::badMods.push_back(e.what());
-			i = Options::rulesets.erase(i);
-		}
-	}
-	if (Options::rulesets.empty())
-	{
-		throw Exception("Failed to load ruleset");
-	}
-	_rules->sortLists();
+	Mod::resetGlobalStatics();
+	delete _mod;
+	_mod = new Mod();
+	_mod->loadAll(FileMap::getRulesets());
 }
 
 /**
@@ -599,44 +572,64 @@ bool Game::isQuitting() const
  */
 void Game::defaultLanguage()
 {
-	std::string defaultLang = "en-US";
+	const std::string defaultLang = "en-US";
+	std::string currentLang = defaultLang;
+
+	delete _lang;
+	_lang = new Language();
+
+	std::ostringstream ss;
+	ss << "common/Language/" << defaultLang << ".yml";
+	std::string defaultPath = CrossPlatform::searchDataFile(ss.str());
+	std::string path = defaultPath;
+
 	// No language set, detect based on system
 	if (Options::language.empty())
 	{
 		std::string locale = CrossPlatform::getLocale();
 		std::string lang = locale.substr(0, locale.find_first_of('-'));
 		// Try to load full locale
-		try
+		Language::replace(path, defaultLang, locale);
+		if (CrossPlatform::fileExists(path))
 		{
-			loadLanguage(locale);
+			currentLang = locale;
 		}
-		catch (std::exception)
+		else
 		{
 			// Try to load language locale
-			try
+			Language::replace(path, locale, lang);
+			if (CrossPlatform::fileExists(path))
 			{
-				loadLanguage(lang);
+				currentLang = lang;
 			}
 			// Give up, use default
-			catch (std::exception)
+			else
 			{
-				loadLanguage(defaultLang);
+				currentLang = defaultLang;
 			}
 		}
 	}
 	else
 	{
 		// Use options language
-		try
+		Language::replace(path, defaultLang, Options::language);
+		if (CrossPlatform::fileExists(path))
 		{
-			loadLanguage(Options::language);
+			currentLang = Options::language;
 		}
 		// Language not found, use default
-		catch (std::exception)
+		else
 		{
-			loadLanguage(defaultLang);
+			currentLang = defaultLang;
 		}
 	}
+
+	loadLanguage(defaultLang);
+	if (currentLang != defaultLang)
+	{
+		loadLanguage(currentLang);
+	}
+	Options::language = currentLang;
 }
 
 /**
@@ -649,7 +642,13 @@ void Game::initAudio()
 		format = AUDIO_S8;
 	else
 		format = AUDIO_S16SYS;
-	if (Mix_OpenAudio(Options::audioSampleRate, format, 2, 1024) != 0)
+	if (Options::audioSampleRate >= 44100)
+		Options::audioChunkSize = std::max(2048, Options::audioChunkSize);
+	else if (Options::audioSampleRate >= 22050)
+		Options::audioChunkSize = std::max(1024, Options::audioChunkSize);
+	else if (Options::audioSampleRate >= 11025)
+		Options::audioChunkSize = std::max(512, Options::audioChunkSize);
+	if (Mix_OpenAudio(Options::audioSampleRate, format, 2, Options::audioChunkSize) != 0)
 	{
 		Log(LOG_ERROR) << Mix_GetError();
 		Log(LOG_WARNING) << "No sound device detected, audio disabled.";
@@ -659,7 +658,7 @@ void Game::initAudio()
 	{
 		Mix_AllocateChannels(16);
 		// Set up UI channels
-		Mix_ReserveChannels(3);
+		Mix_ReserveChannels(4);
 		Mix_GroupChannels(1, 2, 0);
 		Log(LOG_INFO) << "SDL_mixer initialized successfully.";
 		setVolume(Options::soundVolume, Options::musicVolume, Options::uiVolume);

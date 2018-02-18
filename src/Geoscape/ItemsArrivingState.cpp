@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -20,9 +20,8 @@
 #include <sstream>
 #include <algorithm>
 #include "../Engine/Game.h"
-#include "../Resource/ResourcePack.h"
-#include "../Engine/Language.h"
-#include "../Engine/Palette.h"
+#include "../Mod/Mod.h"
+#include "../Engine/LocalizedText.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/Window.h"
 #include "../Interface/Text.h"
@@ -34,9 +33,8 @@
 #include "../Savegame/Craft.h"
 #include "../Savegame/CraftWeapon.h"
 #include "../Savegame/Vehicle.h"
-#include "../Ruleset/Ruleset.h"
-#include "../Ruleset/RuleItem.h"
-#include "../Ruleset/RuleCraftWeapon.h"
+#include "../Mod/RuleItem.h"
+#include "../Mod/RuleCraftWeapon.h"
 #include "GeoscapeState.h"
 #include "../Engine/Options.h"
 #include "../Basescape/BasescapeState.h"
@@ -64,49 +62,40 @@ ItemsArrivingState::ItemsArrivingState(GeoscapeState *state) : _state(state), _b
 	_lstTransfers = new TextList(271, 112, 14, 50);
 
 	// Set palette
-	setPalette("PAL_GEOSCAPE", 6);
+	setInterface("itemsArriving");
 
-	add(_window);
-	add(_btnOk);
-	add(_btnGotoBase);
-	add(_txtTitle);
-	add(_txtItem);
-	add(_txtQuantity);
-	add(_txtDestination);
-	add(_lstTransfers);
+	add(_window, "window", "itemsArriving");
+	add(_btnOk, "button", "itemsArriving");
+	add(_btnGotoBase, "button", "itemsArriving");
+	add(_txtTitle, "text1", "itemsArriving");
+	add(_txtItem, "text1", "itemsArriving");
+	add(_txtQuantity, "text1", "itemsArriving");
+	add(_txtDestination, "text1", "itemsArriving");
+	add(_lstTransfers, "text2", "itemsArriving");
 
 	centerAllSurfaces();
 
 	// Set up objects
-	_window->setColor(Palette::blockOffset(8)+5);
-	_window->setBackground(_game->getResourcePack()->getSurface("BACK13.SCR"));
+	_window->setBackground(_game->getMod()->getSurface("BACK13.SCR"));
 
-	_btnOk->setColor(Palette::blockOffset(8)+5);
 	_btnOk->setText(tr("STR_OK"));
 	_btnOk->onMouseClick((ActionHandler)&ItemsArrivingState::btnOkClick);
 	_btnOk->onKeyboardPress((ActionHandler)&ItemsArrivingState::btnOkClick, Options::keyCancel);
 
-	_btnGotoBase->setColor(Palette::blockOffset(8)+5);
 	_btnGotoBase->setText(tr("STR_GO_TO_BASE"));
 	_btnGotoBase->onMouseClick((ActionHandler)&ItemsArrivingState::btnGotoBaseClick);
 	_btnGotoBase->onKeyboardPress((ActionHandler)&ItemsArrivingState::btnGotoBaseClick, Options::keyOk);
 
-	_txtTitle->setColor(Palette::blockOffset(8)+5);
 	_txtTitle->setBig();
 	_txtTitle->setAlign(ALIGN_CENTER);
 	_txtTitle->setText(tr("STR_ITEMS_ARRIVING"));
 
-	_txtItem->setColor(Palette::blockOffset(8)+5);
 	_txtItem->setText(tr("STR_ITEM"));
 
-	_txtQuantity->setColor(Palette::blockOffset(8)+5);
 	_txtQuantity->setText(tr("STR_QUANTITY_UC"));
 
-	_txtDestination->setColor(Palette::blockOffset(8)+5);
 	_txtDestination->setText(tr("STR_DESTINATION_UC"));
 
-	_lstTransfers->setColor(Palette::blockOffset(8)+10);
-	_lstTransfers->setArrowColor(Palette::blockOffset(8)+5);
 	_lstTransfers->setColumns(3, 155, 41, 98);
 	_lstTransfers->setSelectable(true);
 	_lstTransfers->setBackground(_window);
@@ -123,32 +112,12 @@ ItemsArrivingState::ItemsArrivingState(GeoscapeState *state) : _state(state), _b
 				// Check if we have an automated use for an item
 				if ((*j)->getType() == TRANSFER_ITEM)
 				{
-					RuleItem *item = _game->getRuleset()->getItem((*j)->getItems());
-					for (std::vector<Craft*>::iterator c = (*i)->getCrafts()->begin(); c != (*i)->getCrafts()->end(); ++c)
+					RuleItem *item = _game->getMod()->getItem((*j)->getItems(), true);
+					if (item->getBattleType() == BT_NONE)
 					{
-						// Check if it's ammo to reload a craft
-						if ((*c)->getStatus() == "STR_READY")
+						for (std::vector<Craft*>::iterator c = (*i)->getCrafts()->begin(); c != (*i)->getCrafts()->end(); ++c)
 						{
-							for (std::vector<CraftWeapon*>::iterator w = (*c)->getWeapons()->begin(); w != (*c)->getWeapons()->end(); ++w)
-							{
-								if ((*w) != 0 && (*w)->getRules()->getClipItem() == item->getType() && (*w)->getAmmo() < (*w)->getRules()->getAmmoMax())
-								{
-									(*w)->setRearming(true);
-									(*c)->setStatus("STR_REARMING");
-								}
-							}
-						}
-						// Check if it's ammo to reload a vehicle
-						for (std::vector<Vehicle*>::iterator v = (*c)->getVehicles()->begin(); v != (*c)->getVehicles()->end(); ++v)
-						{
-							std::vector<std::string>::iterator ammo = std::find((*v)->getRules()->getCompatibleAmmo()->begin(), (*v)->getRules()->getCompatibleAmmo()->end(), item->getType());
-							if (ammo != (*v)->getRules()->getCompatibleAmmo()->end() && (*v)->getAmmo() < item->getClipSize())
-							{
-								int used = std::min((*j)->getQuantity(), item->getClipSize() - (*v)->getAmmo());
-								(*v)->setAmmo((*v)->getAmmo() + used);
-								// Note that the items have already been delivered, so we remove them from the base, not the transfer
-								_base->getItems()->removeItem(item->getType(), used);
-							}
+							(*c)->reuseItem((*j)->getItems());
 						}
 					}
 				}

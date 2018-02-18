@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,20 +17,18 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_RESEARCHPROJECT_H
-#define OPENXCOM_RESEARCHPROJECT_H
-
 #include <yaml-cpp/yaml.h>
 
 namespace OpenXcom
 {
+
 class RuleResearch;
-class Ruleset;
+class Mod;
 
 /**
    Represent a ResearchProject
    Contain information about assigned scientist, time already spent and cost of the project.
-*/
+ */
 class ResearchProject
 {
 	RuleResearch * _project;
@@ -43,23 +42,23 @@ public:
 	/// set the number of scientist assigned to this ResearchProject
 	void setAssigned (int nb);
 	/// get the number of scientist assigned to this ResearchProject
-	int getAssigned () const;
+	int getAssigned() const;
 	/// get time already spent on this ResearchProject
-	int getSpent () const;
+	int getSpent() const;
 	/// set time already spent on this ResearchProject
 	void setSpent (int spent);
 	/// get time cost of this ResearchProject
 	int getCost() const;
 	/// set time cost of this ResearchProject
 	void setCost(int f);
-	/// get the ResearchProject Ruleset
-	const RuleResearch * getRules () const;
+	/// get the ResearchProject Mod
+	const RuleResearch * getRules() const;
 	/// load the ResearchProject from YAML
 	void load(const YAML::Node& node);
 	/// save the ResearchProject to YAML
 	YAML::Node save() const;
 	/// Get a string describing current progress.
-	std::string getResearchProgress () const;
+	std::string getResearchProgress() const;
 };
+
 }
-#endif

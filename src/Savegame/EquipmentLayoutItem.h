@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_EQUIPMENTLAYOUTITEM_H
-#define OPENXCOM_EQUIPMENTLAYOUTITEM_H
-
 #include <string>
 #include <yaml-cpp/yaml.h>
 
@@ -41,7 +39,7 @@ public:
 	/// Creates a new soldier-equipment layout item and loads its contents from YAML.
 	EquipmentLayoutItem(const YAML::Node& node);
 	/// Creates a new soldier-equipment layout item.
-	EquipmentLayoutItem(std::string itemType, std::string slot, int slotX, int slotY, std::string ammoItem, int fuseTimer);
+	EquipmentLayoutItem(const std::string &itemType, const std::string &slot, int slotX, int slotY, const std::string &ammoItem, int fuseTimer);
 	/// Cleans up the soldier-equipment layout item.
 	~EquipmentLayoutItem();
 	/// Gets the item's type which has to be in a slot
@@ -63,5 +61,3 @@ public:
 };
 
 }
-
-#endif

@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_BASE_H
-#define OPENXCOM_BASE_H
-
 #include "Target.h"
 #include <string>
 #include <vector>
@@ -27,14 +25,14 @@
 namespace OpenXcom
 {
 
-class Ruleset;
+class Mod;
 class BaseFacility;
 class Soldier;
 class Craft;
 class ItemContainer;
 class Transfer;
 class Language;
-class Ruleset;
+class Mod;
 class SavedGame;
 class ResearchProject;
 class Production;
@@ -48,8 +46,7 @@ class Base : public Target
 {
 private:
 	static const int BASE_SIZE = 6;
-	const Ruleset *_rule;
-	std::wstring _name;
+	const Mod *_mod;
 	std::vector<BaseFacility*> _facilities;
 	std::vector<Soldier*> _soldiers;
 	std::vector<Craft*> _crafts;
@@ -62,11 +59,16 @@ private:
 	bool _retaliationTarget;
 	std::vector<Vehicle*> _vehicles;
 	std::vector<BaseFacility*> _defenses;
+
 	/// Determines space taken up by ammo clips about to rearm craft.
 	double getIgnoredStores();
+	/// Gets the base's default name (unused).
+	std::wstring getDefaultName(Language *) const { return L""; }
+
+	using Target::load;
 public:
 	/// Creates a new base.
-	Base(const Ruleset *rule);
+	Base(const Mod *mod);
 	/// Cleans up the base.
 	~Base();
 	/// Loads the base from YAML.
@@ -76,9 +78,9 @@ public:
 	/// Saves the base's ID to YAML.
 	YAML::Node saveId() const;
 	/// Gets the base's name.
-	std::wstring getName(Language* lang = 0) const;
-	/// Sets the base's name.
-	void setName(const std::wstring &name);
+	std::wstring getName(Language *lang = 0) const;
+	/// Gets the base's marker.
+	int getMarker() const;
 	/// Gets the base's facilities.
 	std::vector<BaseFacility*> *getFacilities();
 	/// Gets the base's soldiers.
@@ -88,7 +90,7 @@ public:
 	/// Gets the base's transfers.
 	std::vector<Transfer*> *getTransfers();
 	/// Gets the base's items.
-	ItemContainer *getItems();
+	ItemContainer *getStorageItems();
 	/// Gets the base's scientists.
 	int getScientists() const;
 	/// Sets the base's scientists.
@@ -136,9 +138,9 @@ public:
 	/// Gets the base's available hangars.
 	int getAvailableHangars() const;
 	/// Get the number of available space lab (not used by a ResearchProject)
-	int getFreeLaboratories () const;
+	int getFreeLaboratories() const;
 	/// Get the number of available space lab (not used by a Production)
-	int getFreeWorkshops () const;
+	int getFreeWorkshops() const;
 
 	int getAllocatedScientists() const;
 
@@ -153,6 +155,8 @@ public:
 	int getCraftCount(const std::string &craft) const;
 	/// Gets the base's craft maintenance.
 	int getCraftMaintenance() const;
+	/// Gets the base's soldiers of a certain type.
+	int getSoldierCount(const std::string &soldier) const;
 	/// Gets the base's personnel maintenance.
 	int getPersonnelMaintenance() const;
 	/// Gets the base's facility maintenance.
@@ -170,7 +174,7 @@ public:
 	/// Remove a Base Production's
 	void removeProduction (Production * p);
 	/// Get the list of Base Production's
-	const std::vector<Production *> & getProductions () const;
+	const std::vector<Production *> & getProductions() const;
 	/// Checks if this base is hyper-wave equipped.
 	bool getHyperDetection() const;
 	/// Gets the base's used psi lab space.
@@ -179,9 +183,11 @@ public:
 	int getAvailablePsiLabs() const;
 	/// Gets the base's total free psi lab space.
 	int getFreePsiLabs() const;
-	/// Gets the total amount of Containment Space
+	/// Gets the amount of free Containment space.
+	int getFreeContainment() const;
+	/// Gets the total amount of Containment space.
 	int getAvailableContainment() const;
-	/// Gets the total amount of used Containment Space
+	/// Gets the total amount of used Containment space.
 	int getUsedContainment() const;
 	/// Sets the craft's battlescape status.
 	void setInBattlescape(bool inbattle);
@@ -192,7 +198,7 @@ public:
 	/// Gets the retaliation status of this base.
 	bool getRetaliationTarget() const;
 	/// Get the detection chance for this base.
-	size_t getDetectionChance(int difficulty) const;
+	size_t getDetectionChance() const;
 	/// Gets how many Grav Shields the base has
 	int getGravShields() const;
 	/// Setup base defenses.
@@ -207,8 +213,8 @@ public:
 	std::list<std::vector<BaseFacility*>::iterator> getDisconnectedFacilities(BaseFacility *remove);
 	/// destroy a facility and deal with the side effects.
 	void destroyFacility(std::vector<BaseFacility*>::iterator facility);
+	/// Cleans up the defenses vector and optionally reclaims the tanks and their ammo.
+	void cleanupDefenses(bool reclaimItems);
 };
 
 }
-
-#endif

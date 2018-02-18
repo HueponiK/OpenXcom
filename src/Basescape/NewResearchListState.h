@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_NEWRESEARCHLISTSTATE_H
-#define OPENXCOM_NEWRESEARCHLISTSTATE_H
-
 #include "../Engine/State.h"
 #include <vector>
 
@@ -51,10 +49,8 @@ public:
 	/// Handler for clicking the OK button.
 	void btnOKClick(Action *action);
 	/// Fills the ResearchProject list with possible ResearchProjects.
-	void fillProjectList ();
+	void fillProjectList();
 	/// Initializes the state.
 	void init();
 };
 }
-
-#endif

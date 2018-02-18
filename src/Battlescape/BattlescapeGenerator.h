@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,30 +17,32 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_BATTLESCAPEGENERATOR_H
-#define OPENXCOM_BATTLESCAPEGENERATOR_H
+#include <vector>
+#include "../Mod/RuleTerrain.h"
+#include "../Mod/MapScript.h"
 
 namespace OpenXcom
 {
 
 class SavedBattleGame;
+class Mod;
 class Craft;
 class Ufo;
-class RuleTerrain;
-class ResourcePack;
 class BattleItem;
 class MapBlock;
 class Vehicle;
 class Tile;
+class RuleInventory;
 class RuleItem;
 class Unit;
 class AlienRace;
 class AlienDeployment;
 class Game;
 class Base;
-class TerrorSite;
+class MissionSite;
 class AlienBase;
 class BattleUnit;
+class Texture;
 
 /**
  * A utility class that generates the initial battlescape data. Taking into account mission type, craft and ufo involved, terrain type,...
@@ -49,24 +52,34 @@ class BattlescapeGenerator
 private:
 	Game *_game;
 	SavedBattleGame *_save;
-	ResourcePack *_res;
+	Mod *_mod;
 	Craft *_craft;
 	Ufo *_ufo;
 	Base *_base;
-	TerrorSite *_terror;
+	MissionSite *_mission;
 	AlienBase *_alienBase;
 	RuleTerrain *_terrain;
 	int _mapsize_x, _mapsize_y, _mapsize_z;
-	int _worldTexture, _worldShade;
+	Texture *_worldTexture;
+	int _worldShade;
 	int _unitSequence;
 	Tile *_craftInventoryTile;
 	std::string _alienRace;
 	int _alienItemLevel;
-	bool _allowAutoLoadout, _baseInventory, _generateFuel;
-	int _craftX, _craftY, _craftZ;
+	bool _allowAutoLoadout, _baseInventory, _generateFuel, _craftDeployed;
+	int _craftZ;
+	SDL_Rect _craftPos;
+	std::vector<SDL_Rect> _ufoPos;
+	int _blocksToDo;
+	std::vector< std::vector<MapBlock*> > _blocks;
+	std::vector< std::vector<bool> > _landingzone;
+	std::vector< std::vector<int> > _segments, _drillMap;
+	MapBlock *_dummy;
 
+	/// sets the map size and associated vars
+	void init(bool resetTerrain);
 	/// Generates a new battlescape map.
-	void generateMap();
+	void generateMap(const std::vector<MapScript*> *script);
 	/// Adds a vehicle to the game.
 	BattleUnit *addXCOMVehicle(Vehicle *v);
 	/// Adds a soldier to the game.
@@ -92,11 +105,33 @@ private:
 	/// Runs necessary checks before physically setting the position.
 	bool canPlaceXCOMUnit(Tile *tile);
 	/// Deploys the aliens, according to the alien deployment rules.
-	void deployAliens(AlienRace *race, AlienDeployment *deployment);
+	void deployAliens(AlienDeployment *deployment);
 	/// Spawns civilians on a terror mission.
 	void deployCivilians(int max);
-	/// Gets battlescape terrain.
-	RuleTerrain *getTerrain(int tex, double lat);
+	/// Finds a spot near a friend to spawn at.
+	bool placeUnitNearFriend(BattleUnit *unit);
+	/// Load all Xcom weapons.
+	void loadWeapons();
+	/// Adds a craft (either a ufo or an xcom craft) somewhere on the map.
+	bool addCraft(MapBlock *craftMap, MapScript *command, SDL_Rect &craftPos);
+	/// Adds a line (generally a road) to the map.
+	bool addLine(MapDirection lineType, const std::vector<SDL_Rect*> *rects);
+	/// Adds a single block at a given position.
+	bool addBlock(int x, int y, MapBlock *block);
+	/// Load the nodes from the associated map blocks.
+	void loadNodes();
+	/// Connects all the nodes together.
+	void attachNodeLinks();
+	/// Selects an unused position on the map of a given size.
+	bool selectPosition(const std::vector<SDL_Rect *> *rects, int &X, int &Y, int sizeX, int sizeY);
+	/// Generates a map from base modules.
+	void generateBaseMap();
+	/// Clears a module from the map.
+	void clearModule(int x, int y, int sizeX, int sizeY);
+	/// Drills some tunnels between map blocks.
+	void drillModules(TunnelData* data, const std::vector<SDL_Rect *> *rects, MapDirection dir);
+	/// Clears all modules in a rect from a command.
+	bool removeBlocks(MapScript *command);
 public:
 	/// Creates a new BattlescapeGenerator class
 	BattlescapeGenerator(Game* game);
@@ -107,7 +142,7 @@ public:
 	/// Sets the ufo.
 	void setUfo(Ufo* ufo);
 	/// Sets the polygon texture.
-	void setWorldTexture(int texture);
+	void setWorldTexture(Texture *texture);
 	/// Sets the polygon shade.
 	void setWorldShade(int shade);
 	/// Sets the alien race.
@@ -116,22 +151,23 @@ public:
 	void setAlienItemlevel(int alienItemLevel);
 	/// Sets the XCom base.
 	void setBase(Base *base);
-	/// Sets the terror site.
-	void setTerrorSite(TerrorSite* site);
+	/// Sets the mission site.
+	void setMissionSite(MissionSite* mission);
 	/// Sets the alien base
 	void setAlienBase(AlienBase* base);
+	/// Sets the terrain.
+	void setTerrain(RuleTerrain *terrain);
 	/// Runs the generator.
 	void run();
-	/// Sets up the next stage (for cydonia/tftd terror missions).
+	/// Sets up the next stage (for Cydonia/TFTD missions).
 	void nextStage();
-	/// Finds a spot near a friend to spawn at.
-	bool placeUnitNearFriend(BattleUnit *unit);
 	/// Generates an inventory battlescape.
 	void runInventory(Craft *craft);
-	/// Load all Xcom weapons.
-	void loadWeapons();
+	/// Sets up the objectives for the map.
+	void setupObjectives(AlienDeployment *ruleDeploy);
+	// Autoequip a set of units
+	static void autoEquip(std::vector<BattleUnit*> units, Mod *mod, SavedBattleGame *addToSave, std::vector<BattleItem*> *craftInv,
+		RuleInventory *groundRuleInv, int worldShade, bool allowAutoLoadout, bool overrideEquipmentLayout);
 };
 
 }
-
-#endif

@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_SOUND_H
-#define OPENXCOM_SOUND_H
-
 #include <SDL_mixer.h>
 #include <string>
 
@@ -46,8 +44,10 @@ public:
 	void play(int channel = -1, int angle = 0, int distance = 0) const;
 	/// Stops all sounds.
 	static void stop();
+	/// Plays the sound repeatedly.
+	void loop();
+	/// Stops the looping sound effect.
+	void stopLoop();
 };
 
 }
-
-#endif

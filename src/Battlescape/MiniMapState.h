@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,16 +17,13 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_MINIMAP_H
-#define OPENXCOM_MINIMAP_H
-
 #include "../Engine/State.h"
 
 namespace OpenXcom
 {
 
 class Camera;
-class InteractiveSurface;
+class BattlescapeButton;
 class Text;
 class MiniMapView;
 class Timer;
@@ -38,7 +36,7 @@ class MiniMapState : public State
 {
 	Surface * _bg;
 	MiniMapView *_miniMapView;
-	InteractiveSurface *_btnLvlUp, *_btnLvlDwn, *_btnOk;
+	BattlescapeButton *_btnLvlUp, *_btnLvlDwn, *_btnOk;
 	Text *_txtLevel;
 	Timer *_timerAnimate;
 	/// Handles Minimap animation.
@@ -57,8 +55,6 @@ public:
 	/// Handler for right-clicking anything.
 	void handle(Action *action);
 	/// Handles timers.
-	void think ();
+	void think();
 };
 }
-
-#endif

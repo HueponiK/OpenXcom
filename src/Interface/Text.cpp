@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,7 +17,6 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "Text.h"
-#include <cctype>
 #include <cmath>
 #include <sstream>
 #include "../Engine/Font.h"
@@ -36,7 +35,7 @@ namespace OpenXcom
  * @param x X position in pixels.
  * @param y Y position in pixels.
  */
-Text::Text(int width, int height, int x, int y) : Surface(width, height, x, y), _big(0), _small(0), _font(0), _lang(0), _text(L""), _wrap(false), _invert(false), _contrast(false), _indent(false), _align(ALIGN_LEFT), _valign(ALIGN_TOP), _color(0), _color2(0)
+Text::Text(int width, int height, int x, int y) : InteractiveSurface(width, height, x, y), _big(0), _small(0), _font(0), _lang(0), _wrap(false), _invert(false), _contrast(false), _indent(false), _align(ALIGN_LEFT), _valign(ALIGN_TOP), _color(0), _color2(0)
 {
 }
 
@@ -54,7 +53,7 @@ Text::~Text()
  * @param currency Currency symbol.
  * @return The formatted string.
  */
-std::wstring Text::formatNumber(int value, std::wstring currency)
+std::wstring Text::formatNumber(int64_t value, const std::wstring &currency)
 {
 	// In the future, the whole setlocale thing should be removed from here.
 	// It is inconsistent with the in-game language selection: locale-specific
@@ -92,7 +91,7 @@ std::wstring Text::formatNumber(int value, std::wstring currency)
  * @param funds The funding value.
  * @return The formatted string.
  */
-std::wstring Text::formatFunding(int funds)
+std::wstring Text::formatFunding(int64_t funds)
 {
 	return formatNumber(funds, L"$");
 }
@@ -251,6 +250,16 @@ void Text::setVerticalAlign(TextVAlign valign)
 }
 
 /**
+ * Returns the way the text is aligned vertically
+ * relative to the drawing area.
+ * @return Horizontal alignment.
+ */
+TextVAlign Text::getVerticalAlign() const
+{
+	return _valign;
+}
+
+/**
  * Changes the color used to render the text. Unlike regular graphics,
  * fonts are greyscale so they need to be assigned a specific position
  * in the palette to be displayed.
@@ -291,6 +300,11 @@ void Text::setSecondaryColor(Uint8 color)
 Uint8 Text::getSecondaryColor() const
 {
 	return _color2;
+}
+
+int Text::getNumLines() const
+{
+	return _wrap ? _lineHeight.size() : 1;
 }
 
 /**
@@ -364,7 +378,7 @@ void Text::processText()
 	_lineHeight.clear();
 
 	int width = 0, word = 0;
-	size_t space = 0;
+	size_t space = 0, textIndentation = 0;
 	bool start = true;
 	Font *font = _font;
 
@@ -390,6 +404,11 @@ void Text::processText()
 		// Keep track of spaces for wordwrapping
 		else if (Font::isSpace((*str)[c]) || Font::isSeparator((*str)[c]))
 		{
+			// Store existing indentation
+			if (c == textIndentation)
+			{
+				textIndentation++;
+			}
 			space = c;
 			width += font->getCharSize((*str)[c]).w;
 			word = 0;
@@ -408,13 +427,14 @@ void Text::processText()
 			word += charWidth;
 
 			// Wordwrap if the last word doesn't fit the line
-			if (_wrap && width >= getWidth() && !start)
+			if (_wrap && width >= getWidth() && (!start || _lang->getTextWrapping() == WRAP_LETTERS))
 			{
+				size_t indentLocation = c;
 				if (_lang->getTextWrapping() == WRAP_WORDS || Font::isSpace((*str)[c]))
 				{
 					// Go back to the last space and put a linebreak there
 					width -= word;
-					size_t indent = space;
+					indentLocation = space;
 					if (Font::isSpace((*str)[space]))
 					{
 						width -= font->getCharSize((*str)[space]).w;
@@ -423,12 +443,7 @@ void Text::processText()
 					else
 					{
 						str->insert(space+1, L"\n");
-						indent++;
-					}
-					if (_indent)
-					{
-						str->insert(indent+1, L" \xA0");
-						width += font->getCharSize(L' ').w + font->getCharSize(L'\xA0').w;
+						indentLocation++;
 					}
 				}
 				else if (_lang->getTextWrapping() == WRAP_LETTERS)
@@ -437,6 +452,20 @@ void Text::processText()
 					str->insert(c, L"\n");
 					width -= charWidth;
 				}
+
+				// Keep initial indentation of text
+				if (textIndentation > 0)
+				{
+					str->insert(indentLocation+1, L" \xA0", textIndentation);
+					indentLocation += textIndentation;
+				}
+				// Indent due to word wrap.
+				if (_indent)
+				{
+					str->insert(indentLocation+1, L" \xA0");
+					width += font->getCharSize(L' ').w + font->getCharSize(L'\xA0').w;
+				}
+
 				_lineWidth.push_back(width);
 				_lineHeight.push_back(font->getCharSize(L'\n').h);
 				if (_lang->getTextWrapping() == WRAP_WORDS)
@@ -503,7 +532,7 @@ struct PaletteShift
 {
 	static inline void func(Uint8& dest, Uint8& src, int off, int mul, int mid)
 	{
-		if(src)
+		if (src)
 		{
 			int inverseOffset = mid ? 2 * (mid - src) : 0;
 			dest = off + src * mul + inverseOffset;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -27,7 +27,7 @@
 namespace OpenXcom
 {
 
-Sound *TextButton::soundPress = 0;
+Sound *TextButton::soundPress;
 
 /**
  * Sets up a text button with the specified size and position.
@@ -37,7 +37,7 @@ Sound *TextButton::soundPress = 0;
  * @param x X position in pixels.
  * @param y Y position in pixels.
  */
-TextButton::TextButton(int width, int height, int x, int y) : InteractiveSurface(width, height, x, y), _color(0), _group(0), _contrast(false), _comboBox(0)
+TextButton::TextButton(int width, int height, int x, int y) : InteractiveSurface(width, height, x, y), _color(0), _group(0), _contrast(false), _geoscapeButton(false), _comboBox(0)
 {
 	_text = new Text(width, height, 0, 0);
 	_text->setSmall();
@@ -87,9 +87,9 @@ Uint8 TextButton::getColor() const
 }
 
 /**
-* Changes the color for the text only.
-* @param color Color value.
-*/
+ * Changes the color for the text only.
+ * @param color Color value.
+ */
 void TextButton::setTextColor(Uint8 color)
 {
 	_text->setColor(color);
@@ -97,8 +97,8 @@ void TextButton::setTextColor(Uint8 color)
 }
 
 /**
-* Changes the text to use the big-size font.
-*/
+ * Changes the text to use the big-size font.
+ */
 void TextButton::setBig()
 {
 	_text->setBig();
@@ -106,8 +106,8 @@ void TextButton::setBig()
 }
 
 /**
-* Changes the text to use the small-size font.
-*/
+ * Changes the text to use the small-size font.
+ */
 void TextButton::setSmall()
 {
 	_text->setSmall();
@@ -115,9 +115,9 @@ void TextButton::setSmall()
 }
 
 /**
-* Returns the font currently used by the text.
-* @return Pointer to font.
-*/
+ * Returns the font currently used by the text.
+ * @return Pointer to font.
+ */
 Font *TextButton::getFont() const
 {
 	return _text->getFont();
@@ -242,6 +242,13 @@ void TextButton::draw()
 		case 3:
 			color = _color + 3 * mul;
 			break;
+		case 4:
+			if (_geoscapeButton)
+			{
+				setPixel(0, 0, _color);
+				setPixel(1, 1, _color);
+			}
+			break;
 		}
 	}
 
@@ -253,7 +260,14 @@ void TextButton::draw()
 
 	if (press)
 	{
-		this->invert(_color + 3 * mul);
+		if (_geoscapeButton)
+		{
+			this->invert(_color + 2 * mul);
+		}
+		else
+		{
+			this->invert(_color + 3 * mul);
+		}
 	}
 	_text->setInvert(press);
 
@@ -277,7 +291,7 @@ void TextButton::mousePress(Action *action, State *state)
 	}
 
 	if (isButtonHandled(action->getDetails()->button.button))
-	{		
+	{
 		if (soundPress != 0 && _group == 0 &&
 			action->getDetails()->button.button != SDL_BUTTON_WHEELUP && action->getDetails()->button.button != SDL_BUTTON_WHEELDOWN)
 		{
@@ -303,7 +317,7 @@ void TextButton::mousePress(Action *action, State *state)
 void TextButton::mouseRelease(Action *action, State *state)
 {
 	if (isButtonHandled(action->getDetails()->button.button))
-	{	
+	{
 		draw();
 		//_redraw = true;
 	}
@@ -338,6 +352,11 @@ void TextButton::setHeight(int height)
 {
 	Surface::setHeight(height);
 	_text->setHeight(height);
+}
+
+void TextButton::setGeoscapeButton(bool geo)
+{
+	_geoscapeButton = geo;
 }
 
 }

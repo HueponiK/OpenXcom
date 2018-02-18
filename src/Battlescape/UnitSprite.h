@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_UNITSPRITE_H
-#define OPENXCOM_UNITSPRITE_H
-
 #include "../Engine/Surface.h"
 
 namespace OpenXcom
@@ -36,10 +34,13 @@ class UnitSprite : public Surface
 {
 private:
 	BattleUnit *_unit;
-	BattleItem *_itemA, *_itemB;
-	SurfaceSet *_unitSurface, *_itemSurfaceA, *_itemSurfaceB;
+	BattleItem *_itemR, *_itemL;
+	SurfaceSet *_unitSurface, *_itemSurfaceR, *_itemSurfaceL;
 	int _part, _animationFrame, _drawingRoutine;
 	bool _helmet;
+	const std::pair<Uint8, Uint8> *_color;
+	int _colorSize;
+
 	/// Drawing routine for XCom soldiers in overalls, sectoids (routine 0),
 	/// mutons (routine 10),
 	/// aquanauts (routine 13),
@@ -69,13 +70,15 @@ private:
 	/// Drawing routine for hallucinoids (routine 12) and biodrones (routine 15).
 	void drawRoutine12();
 	/// Drawing routine for tentaculats.
-	void drawRoutine18();
-	/// Drawing routine for triscenes.
 	void drawRoutine19();
-	/// Drawing routine for xarquids.
+	/// Drawing routine for triscenes.
 	void drawRoutine20();
+	/// Drawing routine for xarquids.
+	void drawRoutine21();
 	/// sort two handed sprites out.
 	void sortRifles();
+	/// Draw surface with changed colors.
+	void drawRecolored(Surface *src);
 public:
 	/// Creates a new UnitSprite at the specified position and size.
 	UnitSprite(int width, int height, int x, int y, bool helmet);
@@ -85,8 +88,6 @@ public:
 	void setSurfaces(SurfaceSet *unitSurface, SurfaceSet *itemSurfaceA, SurfaceSet *itemSurfaceB);
 	/// Sets the battleunit to be rendered.
 	void setBattleUnit(BattleUnit *unit, int part = 0);
-	/// Sets the battleitem to be rendered.
-	void setBattleItem(BattleItem *item);
 	/// Sets the animation frame.
 	void setAnimationFrame(int frame);
 	/// Draws the unit.
@@ -94,5 +95,3 @@ public:
 };
 
 }
-
-#endif
