@@ -17,6 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include "../Engine/Options.h"
 #include "../Engine/State.h"
 #include "../Mod/RuleVideo.h"
 
@@ -35,7 +36,7 @@ class SlideshowState : public State
 private:
 	const SlideshowHeader &_slideshowHeader;
 	const std::vector<SlideshowSlide> *_slideshowSlides;
-	bool _wasLetterboxed;
+	ScalingMode _scalingMode;
 	std::vector<InteractiveSurface *> _slides;
 	std::vector<Text *>_captions;
 	int _curScreen;

@@ -40,7 +40,7 @@ namespace OpenXcom
 /**
  * Initializes all the elements in the Intro screen.
  * @param game Pointer to the core game.
- * @param wasLetterBoxed Was the game letterboxed?
+ * @param scalingMode remembered Scaling Mode
  */
 VideoState::VideoState(const std::vector<std::string> *videos, const std::vector<std::string> *tracks, bool useUfoAudioSequence)
 		: _videos(videos), _tracks(tracks), _useUfoAudioSequence(useUfoAudioSequence)
@@ -396,7 +396,7 @@ void VideoState::init()
 {
 	State::init();
 
-	bool wasLetterboxed = CutsceneState::initDisplay();
+	ScalingMode scalingMode = CutsceneState::initDisplay();
 
 	bool ufoIntroSoundFileDosExists = false;
 	bool ufoIntroSoundFileWinExists = false;
@@ -542,7 +542,7 @@ void VideoState::init()
 #endif
 
 	_game->getCursor()->setVisible(true);
-	CutsceneState::resetDisplay(wasLetterboxed);
+	CutsceneState::resetDisplay(scalingMode);
 	_game->popState();
 }
 

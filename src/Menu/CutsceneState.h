@@ -18,6 +18,7 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "../Engine/State.h"
+#include "../Engine/Options.h"
 
 namespace OpenXcom
 {
@@ -41,10 +42,10 @@ public:
 	static const std::string WIN_GAME;
 	static const std::string LOSE_GAME;
 	// shared utility methods for SlideshowState and VideoState
-	/// returns whether the display was letterboxed (for restoration in resetDisplay)
-	static bool initDisplay();
+	/// returns scaling mode (for restoration in resetDisplay)
+	static ScalingMode initDisplay();
 	/// restores the screen to its original state
-	static void resetDisplay(bool wasLetterboxed);
+	static void resetDisplay(ScalingMode scalingMode);
 };
 
 }

@@ -36,7 +36,7 @@ SlideshowState::SlideshowState(const SlideshowHeader &slideshowHeader,
 			       const std::vector<SlideshowSlide> *slideshowSlides)
 		: _slideshowHeader(slideshowHeader), _slideshowSlides(slideshowSlides), _curScreen(-1)
 {
-	_wasLetterboxed = CutsceneState::initDisplay();
+	_scalingMode = CutsceneState::initDisplay();
 
 	// pre-render and queue up all the frames
 	for (std::vector<SlideshowSlide>::const_iterator it = _slideshowSlides->begin(); it != _slideshowSlides->end(); ++it)
@@ -137,7 +137,7 @@ void SlideshowState::screenSkip(Action *)
 {
 	// slideshow is over.  restore the screen scale and pop the state
 	_game->getCursor()->setVisible(true);
-	CutsceneState::resetDisplay(_wasLetterboxed);
+	CutsceneState::resetDisplay(_scalingMode);
 	_game->popState();
 }
 

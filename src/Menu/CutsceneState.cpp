@@ -100,26 +100,22 @@ void CutsceneState::init()
 	}
 }
 
-bool CutsceneState::initDisplay()
+ScalingMode CutsceneState::initDisplay()
 {
-	bool letterboxed;
-	if (Options::scalingMode == SCALINGMODE_LETTERBOX)
-	{
-		letterboxed = true;
-	}
-	Options::scalingMode = SCALINGMODE_LETTERBOX;
-	Options::baseXResolution = Screen::ORIGINAL_WIDTH;
-	Options::baseYResolution = Screen::ORIGINAL_HEIGHT;
-	_game->getScreen()->resetDisplay(false);
-	return letterboxed;
-}
-
-void CutsceneState::resetDisplay(bool wasLetterboxed)
-{
-	if (wasLetterboxed)
+	ScalingMode scalingMode = (ScalingMode)Options::scalingMode;
+	if (Options::scalingMode == SCALINGMODE_EXPAND || Options::scalingMode == SCALINGMODE_LETTERBOX)
 	{
 		Options::scalingMode = SCALINGMODE_LETTERBOX;
 	}
+	Options::baseXResolution = Screen::ORIGINAL_WIDTH;
+	Options::baseYResolution = Screen::ORIGINAL_HEIGHT;
+	_game->getScreen()->resetDisplay(false);
+	return scalingMode;
+}
+
+void CutsceneState::resetDisplay(ScalingMode scalingMode)
+{
+	Options::scalingMode = scalingMode;
 	Screen::updateScale(Options::geoscapeScale, Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
 	_game->getScreen()->resetDisplay(false);
 }
