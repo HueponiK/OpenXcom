@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,20 +17,20 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "BaseView.h"
+#include <algorithm>
 #include <sstream>
 #include <cmath>
 #include "../Engine/SurfaceSet.h"
 #include "../Engine/Action.h"
 #include "../Savegame/Base.h"
 #include "../Savegame/BaseFacility.h"
-#include "../Ruleset/RuleBaseFacility.h"
+#include "../Mod/RuleBaseFacility.h"
 #include "../Savegame/Craft.h"
-#include "../Ruleset/RuleCraft.h"
+#include "../Mod/RuleCraft.h"
 #include "../Interface/Text.h"
-#include "../Engine/Palette.h"
 #include "../Engine/Timer.h"
 #include "../Engine/Options.h"
-#include <limits>
+#include <climits>
 
 namespace OpenXcom
 {
@@ -44,9 +44,14 @@ namespace OpenXcom
  */
 BaseView::BaseView(int width, int height, int x, int y) : InteractiveSurface(width, height, x, y), _base(0), _texture(0), _selFacility(0), _big(0), _small(0), _lang(0), _gridX(0), _gridY(0), _selSize(0), _selector(0), _blink(true)
 {
-	for (int x = 0; x < BASE_SIZE; ++x)
-		for (int y = 0; y < BASE_SIZE; ++y)
-			_facilities[x][y] = 0;
+	// Clear grid
+	for (int i = 0; i < BASE_SIZE; ++i)
+	{
+		for (int j = 0; j < BASE_SIZE; ++j)
+		{
+			_facilities[i][j] = 0;
+		}
+	}
 
 	_timer = new Timer(100);
 	_timer->onTimer((SurfaceHandler)&BaseView::blink);
@@ -90,8 +95,12 @@ void BaseView::setBase(Base *base)
 
 	// Clear grid
 	for (int x = 0; x < BASE_SIZE; ++x)
+	{
 		for (int y = 0; y < BASE_SIZE; ++y)
+		{
 			_facilities[x][y] = 0;
+		}
+	}
 
 	// Fill grid with base facilities
 	for (std::vector<BaseFacility*>::iterator i = _base->getFacilities()->begin(); i != _base->getFacilities()->end(); ++i)
@@ -174,7 +183,7 @@ void BaseView::setSelectable(int size)
 		r.h = _selector->getHeight();
 		r.x = 0;
 		r.y = 0;
-		_selector->drawRect(&r, Palette::blockOffset(1));
+		_selector->drawRect(&r, _selectorColor);
 		r.w -= 2;
 		r.h -= 2;
 		r.x++;
@@ -260,7 +269,7 @@ void BaseView::reCalcQueuedBuildings()
 		if ((*i)->getBuildTime() > 0)
 		{
 			// Set all queued buildings to infinite.
-			if ((*i)->getBuildTime() > (*i)->getRules()->getBuildTime()) (*i)->setBuildTime(std::numeric_limits<int>::max());
+			if ((*i)->getBuildTime() > (*i)->getRules()->getBuildTime()) (*i)->setBuildTime(INT_MAX);
 			facilities.push_back(*i);
 		}
 
@@ -291,7 +300,7 @@ void BaseView::reCalcQueuedBuildings()
  */
 void BaseView::updateNeighborFacilityBuildTime(BaseFacility* facility, BaseFacility* neighbor)
 {
-	if (0 != facility && 0 != neighbor
+	if (facility != 0 && neighbor != 0
 	&& neighbor->getBuildTime() > neighbor->getRules()->getBuildTime()
 	&& facility->getBuildTime() + neighbor->getRules()->getBuildTime() < neighbor->getBuildTime())
 		neighbor->setBuildTime(facility->getBuildTime() + neighbor->getRules()->getBuildTime());
@@ -321,7 +330,7 @@ void BaseView::blink()
 			r.h = _selector->getHeight();
 			r.x = 0;
 			r.y = 0;
-			_selector->drawRect(&r, Palette::blockOffset(1));
+			_selector->drawRect(&r, _selectorColor);
 			r.w -= 2;
 			r.h -= 2;
 			r.x++;
@@ -411,12 +420,12 @@ void BaseView::draw()
 			int y = (*i)->getY() + (*i)->getRules()->getSize();
 			if (y < BASE_SIZE)
 			{
-				for (int x = (*i)->getX(); x < (*i)->getX() + (*i)->getRules()->getSize(); ++x)
+				for (int subX = (*i)->getX(); subX < (*i)->getX() + (*i)->getRules()->getSize(); ++subX)
 				{
-					if (_facilities[x][y] != 0 && _facilities[x][y]->getBuildTime() == 0)
+					if (_facilities[subX][y] != 0 && _facilities[subX][y]->getBuildTime() == 0)
 					{
 						Surface *frame = _texture->getFrame(8);
-						frame->setX(x * GRID_SIZE);
+						frame->setX(subX * GRID_SIZE);
 						frame->setY(y * GRID_SIZE - GRID_SIZE / 2);
 						frame->blit(this);
 					}
@@ -482,7 +491,7 @@ void BaseView::draw()
 			std::wostringstream ss;
 			ss << (*i)->getBuildTime();
 			text->setAlign(ALIGN_CENTER);
-			text->setColor(Palette::blockOffset(13)+5);
+			text->setColor(_cellColor);
 			text->setText(ss.str());
 			text->blit(this);
 			delete text;
@@ -555,6 +564,15 @@ void BaseView::mouseOut(Action *action, State *state)
 	}
 
 	InteractiveSurface::mouseOut(action, state);
+}
+
+void BaseView::setColor(Uint8 color)
+{
+	_cellColor = color;
+}
+void BaseView::setSecondaryColor(Uint8 color)
+{
+	_selectorColor = color;
 }
 
 }

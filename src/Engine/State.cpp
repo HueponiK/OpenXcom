@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,25 +17,27 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "State.h"
+#include <climits>
 #include "InteractiveSurface.h"
 #include "Game.h"
 #include "Screen.h"
 #include "Surface.h"
-#include "Font.h"
 #include "Language.h"
 #include "LocalizedText.h"
 #include "Palette.h"
-#include "../Resource/ResourcePack.h"
+#include "../Mod/Mod.h"
 #include "../Interface/Window.h"
-#include "../Interface/Text.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/TextEdit.h"
 #include "../Interface/TextList.h"
+#include "../Interface/BattlescapeButton.h"
 #include "../Interface/ArrowButton.h"
 #include "../Interface/Slider.h"
 #include "../Interface/ComboBox.h"
 #include "../Interface/Cursor.h"
 #include "../Interface/FpsCounter.h"
+#include "../Savegame/SavedBattleGame.h"
+#include "../Mod/RuleInterface.h"
 
 namespace OpenXcom
 {
@@ -48,10 +50,11 @@ Game* State::_game = 0;
  * By default states are full-screen.
  * @param game Pointer to the core game.
  */
-State::State() : _surfaces(), _screen(true), _modal(0)
+State::State() : _screen(true), _modal(0), _ruleInterface(0), _ruleInterfaceParent(0)
 {
 	// initialize palette to all black
 	memset(_palette, 0, sizeof(_palette));
+	_cursorColor = _game->getCursor()->getColor();
 }
 
 /**
@@ -62,6 +65,58 @@ State::~State()
 	for (std::vector<Surface*>::iterator i = _surfaces.begin(); i < _surfaces.end(); ++i)
 	{
 		delete *i;
+	}
+}
+
+/**
+ * Set interface data from the ruleset, also sets the palette for the state.
+ * @param category Name of the interface set.
+ * @param alterPal Should we swap out the backpal colors?
+ * @param battleGame Should we use battlescape palette? (this only applies to options screens)
+ */
+void State::setInterface(const std::string& category, bool alterPal, SavedBattleGame *battleGame)
+{
+	int backPal = -1;
+	std::string pal = "PAL_GEOSCAPE";
+
+	_ruleInterface = _game->getMod()->getInterface(category);
+	if (_ruleInterface)
+	{
+		_ruleInterfaceParent = _game->getMod()->getInterface(_ruleInterface->getParent());
+		pal = _ruleInterface->getPalette();
+		Element *element = _ruleInterface->getElement("palette");
+		if (_ruleInterfaceParent)
+		{
+			if (!element)
+			{
+				element = _ruleInterfaceParent->getElement("palette");
+			}
+			if (pal.empty())
+			{
+				pal = _ruleInterfaceParent->getPalette();
+			}
+		}
+		if (element)
+		{
+			int color = alterPal ? element->color2 : element->color;
+			if (color != INT_MAX)
+			{
+				backPal = color;
+			}
+		}
+	}
+	if (battleGame)
+	{
+		battleGame->setPaletteByDepth(this);
+	}
+	else if (pal.empty())
+	{
+		pal = "PAL_GEOSCAPE";
+		setPalette(pal, backPal);
+	}
+	else
+	{
+		setPalette(pal, backPal);
 	}
 }
 
@@ -81,8 +136,74 @@ void State::add(Surface *surface)
 	surface->setPalette(_palette);
 
 	// Set default text resources
-	if (_game->getLanguage() && _game->getResourcePack())
-		surface->initText(_game->getResourcePack()->getFont("FONT_BIG"), _game->getResourcePack()->getFont("FONT_SMALL"), _game->getLanguage());
+	if (_game->getLanguage() && _game->getMod())
+		surface->initText(_game->getMod()->getFont("FONT_BIG"), _game->getMod()->getFont("FONT_SMALL"), _game->getLanguage());
+
+	_surfaces.push_back(surface);
+}
+
+/**
+ * As above, except this adds a surface based on an
+ * interface element defined in the ruleset.
+ * @note that this function REQUIRES the ruleset to have been loaded prior to use.
+ * @param surface Child surface.
+ * @param id the ID of the element defined in the ruleset, if any.
+ * @param category the category of elements this interface is associated with.
+ * @param parent the surface to base the coordinates of this element off.
+ * @note if no parent is defined the element will not be moved.
+ */
+void State::add(Surface *surface, const std::string &id, const std::string &category, Surface *parent)
+{
+	// Set palette
+	surface->setPalette(_palette);
+
+	// this only works if we're dealing with a battlescape button
+	BattlescapeButton *bsbtn = dynamic_cast<BattlescapeButton*>(surface);
+
+	if (_game->getMod()->getInterface(category))
+	{
+		Element *element = _game->getMod()->getInterface(category)->getElement(id);
+		if (element)
+		{
+			if (parent && element->w != INT_MAX && element->h != INT_MAX)
+			{
+				surface->setWidth(element->w);
+				surface->setHeight(element->h);
+			}
+
+			if (parent && element->x != INT_MAX && element->y != INT_MAX)
+			{
+				surface->setX(parent->getX() + element->x);
+				surface->setY(parent->getY() + element->y);
+			}
+
+			surface->setTFTDMode(element->TFTDMode);
+
+			if (element->color != INT_MAX)
+			{
+				surface->setColor(element->color);
+			}
+			if (element->color2 != INT_MAX)
+			{
+				surface->setSecondaryColor(element->color2);
+			}
+			if (element->border != INT_MAX)
+			{
+				surface->setBorderColor(element->border);
+			}
+		}
+	}
+
+	if (bsbtn)
+	{
+		// this will initialize the graphics and settings of the battlescape button.
+		bsbtn->copy(parent);
+		bsbtn->initSurfaces();
+	}
+
+	// Set default text resources
+	if (_game->getLanguage() && _game->getMod())
+		surface->initText(_game->getMod()->getFont("FONT_BIG"), _game->getMod()->getFont("FONT_SMALL"), _game->getLanguage());
 
 	_surfaces.push_back(surface);
 }
@@ -122,12 +243,26 @@ void State::init()
 {
 	_game->getScreen()->setPalette(_palette);
 	_game->getCursor()->setPalette(_palette);
+	_game->getCursor()->setColor(_cursorColor);
 	_game->getCursor()->draw();
 	_game->getFpsCounter()->setPalette(_palette);
+	_game->getFpsCounter()->setColor(_cursorColor);
 	_game->getFpsCounter()->draw();
-	if (_game->getResourcePack() != 0)
+	if (_game->getMod() != 0)
 	{
-		_game->getResourcePack()->setPalette(_palette);
+		_game->getMod()->setPalette(_palette);
+	}
+	for (std::vector<Surface*>::iterator i = _surfaces.begin(); i != _surfaces.end(); ++i)
+	{
+		Window* window = dynamic_cast<Window*>(*i);
+		if (window)
+		{
+			window->invalidate();
+		}
+	}
+	if (_ruleInterface != 0 && !_ruleInterface->getMusic().empty())
+	{
+		_game->getMod()->playMusic(_ruleInterface->getMusic());
 	}
 }
 
@@ -179,7 +314,7 @@ void State::blit()
 void State::hideAll()
 {
 	for (std::vector<Surface*>::iterator i = _surfaces.begin(); i != _surfaces.end(); ++i)
-			(*i)->setHidden(true);
+		(*i)->setHidden(true);
 }
 
 /**
@@ -259,57 +394,25 @@ void State::lowerAllSurfaces()
  */
 void State::applyBattlescapeTheme()
 {
+	Element * element = _game->getMod()->getInterface("mainMenu")->getElement("battlescapeTheme");
 	for (std::vector<Surface*>::iterator i = _surfaces.begin(); i != _surfaces.end(); ++i)
 	{
+		(*i)->setColor(element->color);
+		(*i)->setHighContrast(true);
 		Window* window = dynamic_cast<Window*>(*i);
 		if (window)
 		{
-			window->setColor(Palette::blockOffset(0)-1);
-			window->setHighContrast(true);
-			window->setBackground(_game->getResourcePack()->getSurface("TAC00.SCR"));
-		}
-		Text* text = dynamic_cast<Text*>(*i);
-		if (text)
-		{
-			text->setColor(Palette::blockOffset(0)-1);
-			text->setHighContrast(true);
-		}
-		TextButton* button = dynamic_cast<TextButton*>(*i);
-		if (button)
-		{
-			button->setColor(Palette::blockOffset(0)-1);
-			button->setHighContrast(true);
-		}
-		TextEdit* edit = dynamic_cast<TextEdit*>(*i);
-		if (edit)
-		{
-			edit->setColor(Palette::blockOffset(0)-1);
-			edit->setHighContrast(true);
+			window->setBackground(_game->getMod()->getSurface("TAC00.SCR"));
 		}
 		TextList* list = dynamic_cast<TextList*>(*i);
 		if (list)
 		{
-			list->setColor(Palette::blockOffset(0)-1);
-			list->setArrowColor(Palette::blockOffset(0));
-			list->setHighContrast(true);
-		}
-		ArrowButton *arrow = dynamic_cast<ArrowButton*>(*i);
-		if (arrow)
-		{
-			arrow->setColor(Palette::blockOffset(0));
-		}
-		Slider *slider = dynamic_cast<Slider*>(*i);
-		if (slider)
-		{
-			slider->setColor(Palette::blockOffset(0)-1);
-			slider->setHighContrast(true);
+			list->setArrowColor(element->border);
 		}
 		ComboBox *combo = dynamic_cast<ComboBox*>(*i);
 		if (combo)
 		{
-			combo->setColor(Palette::blockOffset(0)-1);
-			combo->setArrowColor(Palette::blockOffset(0));
-			combo->setHighContrast(true);
+			combo->setArrowColor(element->border);
 		}
 	}
 }
@@ -363,9 +466,9 @@ void State::setPalette(SDL_Color *colors, int firstcolor, int ncolors, bool imme
 		_game->getCursor()->draw();
 		_game->getFpsCounter()->setPalette(_palette);
 		_game->getFpsCounter()->draw();
-		if (_game->getResourcePack() != 0)
+		if (_game->getMod() != 0)
 		{
-			_game->getResourcePack()->setPalette(_palette);
+			_game->getMod()->setPalette(_palette);
 		}
 	}
 }
@@ -377,9 +480,29 @@ void State::setPalette(SDL_Color *colors, int firstcolor, int ncolors, bool imme
  */
 void State::setPalette(const std::string &palette, int backpals)
 {
-	setPalette(_game->getResourcePack()->getPalette(palette)->getColors(), 0, 256, false);
+	setPalette(_game->getMod()->getPalette(palette)->getColors(), 0, 256, false);
+	if (palette == "PAL_GEOSCAPE")
+	{
+		_cursorColor = Mod::GEOSCAPE_CURSOR;
+	}
+	else if (palette == "PAL_BASESCAPE")
+	{
+		_cursorColor = Mod::BASESCAPE_CURSOR;
+	}
+	else if (palette == "PAL_UFOPAEDIA")
+	{
+		_cursorColor = Mod::UFOPAEDIA_CURSOR;
+	}
+	else if (palette == "PAL_GRAPHS")
+	{
+		_cursorColor = Mod::GRAPHS_CURSOR;
+	}
+	else
+	{
+		_cursorColor = Mod::BATTLESCAPE_CURSOR;
+	}
 	if (backpals != -1)
-		setPalette(_game->getResourcePack()->getPalette("BACKPALS.DAT")->getColors(Palette::blockOffset(backpals)), Palette::backPos, 16, false);
+		setPalette(_game->getMod()->getPalette("BACKPALS.DAT")->getColors(Palette::blockOffset(backpals)), Palette::backPos, 16, false);
 	setPalette(NULL); // delay actual update to the end
 }
 
@@ -387,7 +510,7 @@ void State::setPalette(const std::string &palette, int backpals)
  * Returns the state's 8bpp palette.
  * @return Pointer to the palette's colors.
  */
-SDL_Color *const State::getPalette()
+SDL_Color *State::getPalette()
 {
 	return _palette;
 }
@@ -419,7 +542,7 @@ void State::recenter(int dX, int dY)
 
 void State::setGamePtr(Game* game)
 {
-    _game = game;
+	_game = game;
 }
 
 }

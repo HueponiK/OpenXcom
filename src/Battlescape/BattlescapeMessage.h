@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_BATTLESCAPEMESSAGE_H
-#define OPENXCOM_BATTLESCAPEMESSAGE_H
-
 #include <string>
 #include "../Engine/Surface.h"
 
@@ -59,8 +57,8 @@ public:
 	void blit(Surface *surface);
 	/// Special handling for setting the height of the battlescape message.
 	void setHeight(int height);
+	/// Sets the text color of the battlescape message.
+	void setTextColor(Uint8 color);
 };
 
 }
-
-#endif

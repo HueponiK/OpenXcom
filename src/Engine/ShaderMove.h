@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,10 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-
-#ifndef OPENXCOM_SHADERMOVE_H
-#define	OPENXCOM_SHADERMOVE_H
-
 #include "ShaderDraw.h"
 
 namespace OpenXcom
@@ -143,7 +140,7 @@ inline ShaderMove<Uint8> ShaderCrop(Surface* s, int x, int y)
 {
 	ShaderMove<Uint8> ret(s, x, y);
 	SDL_Rect* s_crop = s->getCrop();
-	if(s_crop->w && s_crop->h)
+	if (s_crop->w && s_crop->h)
 	{
 		GraphSubset crop(std::make_pair(s_crop->x, s_crop->x + s_crop->w), std::make_pair(s_crop->y, s_crop->y + s_crop->h));
 		ret.setDomain(crop);
@@ -163,6 +160,3 @@ inline ShaderMove<Uint8> ShaderCrop(Surface* s)
 }
 
 }//namespace OpenXcom
-
-#endif	/* OPENXCOM_SHADERMOVE_H */
-

@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_ACTIONMENUITEM_H
-#define OPENXCOM_ACTIONMENUITEM_H
-
 #include "../Engine/InteractiveSurface.h"
 #include "BattlescapeGame.h"
 
@@ -41,7 +39,7 @@ class ActionMenuItem : public InteractiveSurface
 private:
 	bool _highlighted;
 	BattleActionType _action;
-	int _tu;
+	int _tu, _highlightModifier;
 	Frame *_frame;
 	Text *_txtDescription, *_txtAcc, *_txtTU;
 public:
@@ -50,7 +48,7 @@ public:
 	/// Cleans up the ActionMenuItem.
 	~ActionMenuItem();
 	/// Assigns an action to it.
-	void setAction(BattleActionType action, std::wstring description, std::wstring accuracy, std::wstring timeunits, int tu);
+	void setAction(BattleActionType action, const std::wstring &description, const std::wstring &accuracy, const std::wstring &timeunits, int tu);
 	/// Gets the assigned action.
 	BattleActionType getAction() const;
 	/// Gets the assigned action TUs.
@@ -67,5 +65,3 @@ public:
 };
 
 }
-
-#endif

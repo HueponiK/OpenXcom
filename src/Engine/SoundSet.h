@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_SOUNDSET_H
-#define OPENXCOM_SOUNDSET_H
-
 #include <map>
 #include <string>
 
@@ -49,8 +47,8 @@ public:
 	Sound *addSound(unsigned int i);
 	/// Gets the total sounds in the set.
 	size_t getTotalSounds() const;
+	/// Loads a specific entry from a CAT file into the soundset.
+	void loadCatbyIndex(const std::string &filename, int index);
 };
 
 }
-
-#endif

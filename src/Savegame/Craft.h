@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,22 +17,22 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_CRAFT_H
-#define OPENXCOM_CRAFT_H
-
 #include "MovingTarget.h"
+#include <utility>
 #include <vector>
 #include <string>
 
 namespace OpenXcom
 {
 
+typedef std::pair<std::string, int> CraftId;
+
 class RuleCraft;
 class Base;
 class Soldier;
 class CraftWeapon;
 class ItemContainer;
-class Ruleset;
+class Mod;
 class SavedGame;
 class Vehicle;
 
@@ -52,28 +53,31 @@ private:
 	std::vector<Vehicle*> _vehicles;
 	std::string _status;
 	bool _lowFuel, _mission, _inBattlescape, _inDogfight;
-	std::wstring _name;
+
+	using MovingTarget::load;
 public:
 	/// Creates a craft of the specified type.
 	Craft(RuleCraft *rules, Base *base, int id = 0);
 	/// Cleans up the craft.
 	~Craft();
 	/// Loads the craft from YAML.
-	void load(const YAML::Node& node, const Ruleset *rule, SavedGame *save);
+	void load(const YAML::Node& node, const Mod *mod, SavedGame *save);
 	/// Saves the craft to YAML.
 	YAML::Node save() const;
 	/// Saves the craft's ID to YAML.
 	YAML::Node saveId() const;
+	/// Loads a craft ID from YAML.
+	static CraftId loadId(const YAML::Node &node);
 	/// Gets the craft's ruleset.
 	RuleCraft *getRules() const;
 	/// Sets the craft's ruleset.
 	void changeRules(RuleCraft *rules);
 	/// Gets the craft's ID.
 	int getId() const;
-	/// Gets the craft's name.
-	std::wstring getName(Language *lang) const;
-	/// Sets the craft's name.
-	void setName(const std::wstring &newName);
+	/// Gets the craft's default name.
+	std::wstring getDefaultName(Language *lang) const;
+	/// Gets the craft's marker.
+	int getMarker() const;
 	/// Gets the craft's base.
 	Base *getBase() const;
 	/// Sets the craft's base.
@@ -132,6 +136,8 @@ public:
 	void returnToBase();
 	/// Checks if a target is detected by the craft's radar.
 	bool detect(Target *target) const;
+	/// Checks if a target is inside the craft's radar range.
+	bool insideRadarRange(Target *target) const;
 	/// Handles craft logic.
 	void think();
 	/// Does a craft full checkup.
@@ -143,7 +149,7 @@ public:
 	/// Refuels the craft.
 	void refuel();
 	/// Rearms the craft.
-	std::string rearm(Ruleset *rules);
+	std::string rearm(const Mod *mod);
 	/// Sets the craft's battlescape status.
 	void setInBattlescape(bool inbattle);
 	/// Gets if the craft is in battlescape.
@@ -164,8 +170,12 @@ public:
 	void setInterceptionOrder(const int order);
 	/// Gets interception number.
 	int getInterceptionOrder() const;
+	/// Gets the craft's unique id.
+	CraftId getUniqueId() const;
+	/// Unloads the craft.
+	void unload(const Mod *mod);
+	/// Reuses a base item.
+	void reuseItem(const std::string &item);
 };
 
 }
-
-#endif

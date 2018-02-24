@@ -1,5 +1,6 @@
-	/*
- * Copyright 2010-2014 OpenXcom Developers.
+	#pragma once
+/*
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_SCREEN_H
-#define OPENXCOM_SCREEN_H
-
 #include <SDL.h>
 #include <string>
 #include "OpenGL.h"
@@ -46,7 +44,6 @@ private:
 	double _scaleX, _scaleY;
 	int _topBlackBand, _bottomBlackBand, _leftBlackBand, _rightBlackBand, _cursorTopBlackBand, _cursorLeftBlackBand;
 	Uint32 _flags;
-	int _zoomSurfaceY(SDL_Surface * src, SDL_Surface * dst, int flipx, int flipy);
 	SDL_Color deferredPalette[256];
 	int _numColors, _firstColor;
 	bool _pushPalette;
@@ -64,9 +61,9 @@ public:
 	/// Cleans up the display screen.
 	~Screen();
 	/// Get horizontal offset.
-	int getDX();
+	int getDX() const;
 	/// Get vertical offset.
-	int getDY();
+	int getDY() const;
 	/// Gets the internal buffer.
 	Surface *getSurface();
 	/// Handles keyboard events.
@@ -95,14 +92,12 @@ public:
 	int getCursorLeftBlackBand() const;
 	/// Takes a screenshot.
 	void screenshot(const std::string &filename) const;
-	/// Checks whether HQX is requested and works for the selected resolution
-	static bool isHQXEnabled();
+	/// Checks whether a 32bit scaler is requested and works for the selected resolution
+	static bool use32bitScaler();
 	/// Checks whether OpenGL output is requested
-	static bool isOpenGLEnabled();
+	static bool useOpenGL();
 	/// update the game scale as required.
 	static void updateScale(int &type, int selection, int &x, int &y, bool change);
 };
 
 }
-
-#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -18,17 +18,13 @@
  */
 #include "ResearchCompleteState.h"
 #include "../Engine/Game.h"
-#include "../Engine/Palette.h"
-#include "../Engine/Language.h"
-#include "../Resource/ResourcePack.h"
+#include "../Engine/LocalizedText.h"
+#include "../Mod/Mod.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/Window.h"
 #include "../Interface/Text.h"
-#include "../Ruleset/RuleResearch.h"
-#include "../Ruleset/Ruleset.h"
-#include "../Ruleset/ArticleDefinition.h"
+#include "../Mod/RuleResearch.h"
 #include "../Ufopaedia/Ufopaedia.h"
-#include <algorithm>
 #include "../Engine/Options.h"
 
 namespace OpenXcom
@@ -36,10 +32,11 @@ namespace OpenXcom
 /**
  * Initializes all the elements in the EndResearch screen.
  * @param game Pointer to the core game.
- * @param research Pointer to the completed research.
+ * @param newResearch Pointer to the completed research (or 0, if the ufopedia article shouldn't popup again).
  * @param bonus Pointer to bonus unlocked research.
+ * @param research Pointer to the research project.
  */
-ResearchCompleteState::ResearchCompleteState(const RuleResearch * research, const RuleResearch * bonus): _research(research), _bonus(bonus)
+ResearchCompleteState::ResearchCompleteState(const RuleResearch *newResearch, const RuleResearch *bonus, const RuleResearch *research) : _research(newResearch), _bonus(bonus)
 {
 	_screen = false;
 
@@ -51,36 +48,31 @@ ResearchCompleteState::ResearchCompleteState(const RuleResearch * research, cons
 	_txtResearch = new Text(230, 32, 45, 96);
 
 	// Set palette
-	setPalette("PAL_GEOSCAPE", 0);
+	setInterface("geoResearchComplete");
 
-	add(_window);
-	add(_btnOk);
-	add(_btnReport);
-	add(_txtTitle);
-	add(_txtResearch);
+	add(_window, "window", "geoResearchComplete");
+	add(_btnOk, "button", "geoResearchComplete");
+	add(_btnReport, "button", "geoResearchComplete");
+	add(_txtTitle, "text1", "geoResearchComplete");
+	add(_txtResearch, "text2", "geoResearchComplete");
 
 	centerAllSurfaces();
 
 	// Set up objects
-	_window->setColor(Palette::blockOffset(15)-1);
-	_window->setBackground(_game->getResourcePack()->getSurface("BACK05.SCR"));
+	_window->setBackground(_game->getMod()->getSurface("BACK05.SCR"));
 
-	_btnOk->setColor(Palette::blockOffset(8)+5);
 	_btnOk->setText(tr("STR_OK"));
 	_btnOk->onMouseClick((ActionHandler)&ResearchCompleteState::btnOkClick);
 	_btnOk->onKeyboardPress((ActionHandler)&ResearchCompleteState::btnOkClick, Options::keyCancel);
 
-	_btnReport->setColor(Palette::blockOffset(8)+5);
 	_btnReport->setText(tr("STR_VIEW_REPORTS"));
 	_btnReport->onMouseClick((ActionHandler)&ResearchCompleteState::btnReportClick);
 	_btnReport->onKeyboardPress((ActionHandler)&ResearchCompleteState::btnReportClick, Options::keyOk);
 
-	_txtTitle->setColor(Palette::blockOffset(15)-1);
 	_txtTitle->setBig();
 	_txtTitle->setAlign(ALIGN_CENTER);
 	_txtTitle->setText(tr("STR_RESEARCH_COMPLETED"));
 
-	_txtResearch->setColor(Palette::blockOffset(8)+10);
 	_txtResearch->setAlign(ALIGN_CENTER);
 	_txtResearch->setBig();
 	_txtResearch->setWordWrap(true);
@@ -110,7 +102,7 @@ void ResearchCompleteState::btnReportClick(Action *)
 	std::string bonusName;
 	if (_bonus)
 	{
-		if (_bonus->getLookup() == "")
+		if (_bonus->getLookup().empty())
 			bonusName = _bonus->getName();
 		else
 			bonusName = _bonus->getLookup();
@@ -118,7 +110,7 @@ void ResearchCompleteState::btnReportClick(Action *)
 	}
 	if (_research)
 	{
-		if (_research->getLookup() == "")
+		if (_research->getLookup().empty())
 			name = _research->getName();
 		else
 			name = _research->getLookup();

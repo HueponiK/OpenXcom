@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -18,12 +18,9 @@
  */
 #include "SoldierMemorialState.h"
 #include <sstream>
-#include <iomanip>
 #include "../Engine/Game.h"
-#include "../Resource/ResourcePack.h"
-#include "../Engine/Music.h"
-#include "../Engine/Language.h"
-#include "../Engine/Palette.h"
+#include "../Mod/Mod.h"
+#include "../Engine/LocalizedText.h"
 #include "../Engine/Options.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/Window.h"
@@ -35,6 +32,7 @@
 #include "../Savegame/SoldierDeath.h"
 #include "../Savegame/GameTime.h"
 #include "SoldierInfoState.h"
+#include "../Menu/StatisticsState.h"
 
 namespace OpenXcom
 {
@@ -47,7 +45,8 @@ SoldierMemorialState::SoldierMemorialState()
 {
 	// Create objects
 	_window = new Window(this, 320, 200, 0, 0);
-	_btnOk = new TextButton(288, 16, 16, 176);
+	_btnOk = new TextButton(148, 16, 164, 176);
+	_btnStatistics = new TextButton(148, 16, 8, 176);
 	_txtTitle = new Text(310, 17, 5, 8);
 	_txtName = new Text(114, 9, 16, 36);
 	_txtRank = new Text(102, 9, 130, 36);
@@ -57,43 +56,39 @@ SoldierMemorialState::SoldierMemorialState()
 	_lstSoldiers = new TextList(288, 120, 8, 44);
 
 	// Set palette
-	setPalette("PAL_BASESCAPE", 7);
+	setInterface("soldierMemorial");
 
-	_game->getResourcePack()->playMusic("GMLOSE");
-
-	add(_window);
-	add(_btnOk);
-	add(_txtTitle);
-	add(_txtName);
-	add(_txtRank);
-	add(_txtDate);
-	add(_txtRecruited);
-	add(_txtLost);
-	add(_lstSoldiers);
+	add(_window, "window", "soldierMemorial");
+	add(_btnOk, "button", "soldierMemorial");
+	add(_btnStatistics, "button", "soldierMemorial");
+	add(_txtTitle, "text", "soldierMemorial");
+	add(_txtName, "text", "soldierMemorial");
+	add(_txtRank, "text", "soldierMemorial");
+	add(_txtDate, "text", "soldierMemorial");
+	add(_txtRecruited, "text", "soldierMemorial");
+	add(_txtLost, "text", "soldierMemorial");
+	add(_lstSoldiers, "list", "soldierMemorial");
 
 	centerAllSurfaces();
 
 	// Set up objects
-	_window->setColor(Palette::blockOffset(13)+10);
-	_window->setBackground(_game->getResourcePack()->getSurface("BACK02.SCR"));
+	_window->setBackground(_game->getMod()->getSurface("BACK02.SCR"));
 
-	_btnOk->setColor(Palette::blockOffset(13)+10);
 	_btnOk->setText(tr("STR_OK"));
 	_btnOk->onMouseClick((ActionHandler)&SoldierMemorialState::btnOkClick);
 	_btnOk->onKeyboardPress((ActionHandler)&SoldierMemorialState::btnOkClick, Options::keyCancel);
 
-	_txtTitle->setColor(Palette::blockOffset(13)+10);
+	_btnStatistics->setText(tr("STR_STATISTICS"));
+	_btnStatistics->onMouseClick((ActionHandler)&SoldierMemorialState::btnStatisticsClick);
+
 	_txtTitle->setBig();
 	_txtTitle->setAlign(ALIGN_CENTER);
 	_txtTitle->setText(tr("STR_MEMORIAL"));
 
-	_txtName->setColor(Palette::blockOffset(13)+10);
 	_txtName->setText(tr("STR_NAME_UC"));
 
-	_txtRank->setColor(Palette::blockOffset(13)+10);
 	_txtRank->setText(tr("STR_RANK"));
 
-	_txtDate->setColor(Palette::blockOffset(13)+10);
 	_txtDate->setText(tr("STR_DATE_UC"));
 
 	size_t lost = _game->getSavedGame()->getDeadSoldiers()->size();
@@ -103,16 +98,10 @@ SoldierMemorialState::SoldierMemorialState()
 		recruited += (*i)->getTotalSoldiers();
 	}
 
-	_txtRecruited->setColor(Palette::blockOffset(13)+10);
-	_txtRecruited->setSecondaryColor(Palette::blockOffset(13));
-	_txtRecruited->setText(tr("STR_SOLDIERS_RECRUITED").arg(recruited));
+	_txtRecruited->setText(tr("STR_SOLDIERS_RECRUITED_UC").arg(recruited));
 
-	_txtLost->setColor(Palette::blockOffset(13)+10);
-	_txtLost->setSecondaryColor(Palette::blockOffset(13));
-	_txtLost->setText(tr("STR_SOLDIERS_LOST").arg(lost));
+	_txtLost->setText(tr("STR_SOLDIERS_LOST_UC").arg(lost));
 
-	_lstSoldiers->setColor(Palette::blockOffset(15)+6);
-	_lstSoldiers->setArrowColor(Palette::blockOffset(13)+10);
 	_lstSoldiers->setColumns(5, 114, 88, 30, 25, 35);
 	_lstSoldiers->setSelectable(true);
 	_lstSoldiers->setBackground(_window);
@@ -146,7 +135,16 @@ SoldierMemorialState::~SoldierMemorialState()
 void SoldierMemorialState::btnOkClick(Action *)
 {
 	_game->popState();
-	_game->getResourcePack()->playMusic("GMGEO", true);
+	_game->getMod()->playMusic("GMGEO");
+}
+
+/**
+* Shows the Statistics screen.
+* @param action Pointer to an action.
+*/
+void SoldierMemorialState::btnStatisticsClick(Action *)
+{
+	_game->pushState(new StatisticsState);
 }
 
 /**

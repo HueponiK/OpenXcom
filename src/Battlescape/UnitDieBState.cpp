@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -18,24 +18,21 @@
  */
 
 #include "UnitDieBState.h"
-#include "ExplosionBState.h"
 #include "TileEngine.h"
 #include "BattlescapeState.h"
 #include "Map.h"
-#include "Camera.h"
 #include "../Engine/Game.h"
 #include "../Savegame/BattleItem.h"
 #include "../Savegame/BattleUnit.h"
 #include "../Savegame/SavedBattleGame.h"
 #include "../Savegame/Tile.h"
-#include "../Resource/ResourcePack.h"
-#include "../Ruleset/Ruleset.h"
+#include "../Mod/Mod.h"
 #include "../Engine/Sound.h"
 #include "../Engine/RNG.h"
 #include "../Engine/Options.h"
 #include "../Engine/Language.h"
-#include "../Ruleset/Armor.h"
-#include "../Ruleset/Unit.h"
+#include "../Mod/Armor.h"
+#include "../Mod/Unit.h"
 #include "InfoboxOKState.h"
 #include "InfoboxState.h"
 #include "../Savegame/Node.h"
@@ -49,17 +46,40 @@ namespace OpenXcom
  * @param unit Dying unit.
  * @param damageType Type of damage that caused the death.
  * @param noSound Whether to disable the death sound.
+ * @param noCorpse Whether to disable the corpse spawn.
  */
-UnitDieBState::UnitDieBState(BattlescapeGame *parent, BattleUnit *unit, ItemDamageType damageType, bool noSound) : BattleState(parent), _unit(unit), _damageType(damageType), _noSound(noSound)
+UnitDieBState::UnitDieBState(BattlescapeGame *parent, BattleUnit *unit, ItemDamageType damageType, bool noSound, bool noCorpse) : BattleState(parent), _unit(unit), _damageType(damageType), _noSound(noSound), _noCorpse(noCorpse), _extraFrame(0)
 {
 	// don't show the "fall to death" animation when a unit is blasted with explosives or he is already unconscious
 	if (_damageType == DT_HE || _unit->getStatus() == STATUS_UNCONSCIOUS)
 	{
+
+		/********************************************************
+		Proclamation from Lord Xenu:
+
+		any unit that is going to skip its death pirouette
+		MUST have its direction set to 3 first.
+
+		Failure to comply is treason, and treason is punishable
+		by death. (after being correctly oriented)
+
+		********************************************************/
+		_unit->setDirection(3);
+
+
 		_unit->startFalling();
 
 		while (_unit->getStatus() == STATUS_COLLAPSING)
 		{
 			_unit->keepFalling();
+		}
+		if (_parent->getSave()->isBeforeGame())
+		{
+			if (!noCorpse)
+			{
+				convertUnitToCorpse();
+			}
+			_extraFrame = 3; // shortcut to popState()
 		}
 	}
 	else
@@ -69,8 +89,7 @@ UnitDieBState::UnitDieBState(BattlescapeGame *parent, BattleUnit *unit, ItemDama
 			_parent->getMap()->setUnitDying(true);
 		}
 		_parent->setStateInterval(BattlescapeState::DEFAULT_ANIM_SPEED);
-		_originalDir = _unit->getDirection();
-		if (_originalDir != 3)
+		if (_unit->getDirection() != 3)
 		{
 			_parent->setStateInterval(BattlescapeState::DEFAULT_ANIM_SPEED / 3);
 		}
@@ -79,19 +98,19 @@ UnitDieBState::UnitDieBState(BattlescapeGame *parent, BattleUnit *unit, ItemDama
 	_unit->clearVisibleTiles();
 	_unit->clearVisibleUnits();
 
-    if (_unit->getFaction() == FACTION_HOSTILE)
-    {
-        std::vector<Node *> *nodes = _parent->getSave()->getNodes();
-        if (!nodes) return; // this better not happen.
+	if (!_parent->getSave()->isBeforeGame() && _unit->getFaction() == FACTION_HOSTILE)
+	{
+		std::vector<Node *> *nodes = _parent->getSave()->getNodes();
+		if (!nodes) return; // this better not happen.
 
-        for (std::vector<Node*>::iterator  n = nodes->begin(); n != nodes->end(); ++n)
-        {
-            if (_parent->getSave()->getTileEngine()->distanceSq((*n)->getPosition(), _unit->getPosition()) < 4)
-            {
-                (*n)->setType((*n)->getType() | Node::TYPE_DANGEROUS);
-            }
-        }
-    }
+		for (std::vector<Node*>::iterator  n = nodes->begin(); n != nodes->end(); ++n)
+		{
+			if (!(*n)->isDummy() && _parent->getSave()->getTileEngine()->distanceSq((*n)->getPosition(), _unit->getPosition()) < 4)
+			{
+				(*n)->setType((*n)->getType() | Node::TYPE_DANGEROUS);
+			}
+		}
+	}
 }
 
 /**
@@ -112,6 +131,11 @@ void UnitDieBState::init()
  */
 void UnitDieBState::think()
 {
+	if (_extraFrame == 3)
+	{
+		_parent->popState();
+		return;
+	}
 	if (_unit->getDirection() != 3 && _damageType != DT_HE)
 	{
 		int dir = _unit->getDirection() + 1;
@@ -138,50 +162,31 @@ void UnitDieBState::think()
 		{
 			playDeathSound();
 		}
+		if (_unit->getRespawn())
+		{
+			while (_unit->getStatus() == STATUS_COLLAPSING)
+			{
+				_unit->keepFalling();
+			}
+		}
 	}
-
-	if (_unit->isOut())
+	if (_extraFrame == 2)
 	{
-		if (!_noSound && _damageType == DT_HE && _unit->getStatus() != STATUS_UNCONSCIOUS)
-		{
-			playDeathSound();
-		}
-		if (_unit->getStatus() == STATUS_UNCONSCIOUS && _unit->getSpecialAbility() == SPECAB_EXPLODEONDEATH)
-		{
-			_unit->instaKill();
-		}
 		_parent->getMap()->setUnitDying(false);
-		if (_unit->getTurnsSinceSpotted() < 255)
-		{
-			_unit->setTurnsSinceSpotted(255);
-		}
-		if (!_unit->getSpawnUnit().empty())
-		{
-			// converts the dead zombie to a chryssalid
-			BattleUnit *newUnit = _parent->convertUnit(_unit, _unit->getSpawnUnit());
-			newUnit->lookAt(_originalDir);
-		}
-		else
-		{
-			convertUnitToCorpse();
-		}
 		_parent->getTileEngine()->calculateUnitLighting();
 		_parent->popState();
-		if (_unit->getOriginalFaction() == FACTION_PLAYER && _unit->getSpawnUnit().empty())
+		if (_unit->getOriginalFaction() == FACTION_PLAYER)
 		{
 			Game *game = _parent->getSave()->getBattleState()->getGame();
 			if (_unit->getStatus() == STATUS_DEAD)
 			{
-				if (_unit->getArmor()->getSize() == 1)
+				if (_damageType == DT_NONE && _unit->getSpawnUnit().empty())
 				{
-					if (_damageType == DT_NONE)
-					{
-						game->pushState(new InfoboxOKState(game->getLanguage()->getString("STR_HAS_DIED_FROM_A_FATAL_WOUND", _unit->getGender()).arg(_unit->getName(game->getLanguage()))));
-					}
-					else if (Options::battleNotifyDeath)
-					{
-						game->pushState(new InfoboxState(game->getLanguage()->getString("STR_HAS_BEEN_KILLED", _unit->getGender()).arg(_unit->getName(game->getLanguage()))));
-					}
+					game->pushState(new InfoboxOKState(game->getLanguage()->getString("STR_HAS_DIED_FROM_A_FATAL_WOUND", _unit->getGender()).arg(_unit->getName(game->getLanguage()))));
+				}
+				else if (Options::battleNotifyDeath && _unit->getGeoscapeSoldier() != 0)
+				{
+					game->pushState(new InfoboxState(game->getLanguage()->getString("STR_HAS_BEEN_KILLED", _unit->getGender()).arg(_unit->getName(game->getLanguage()))));
 				}
 			}
 			else
@@ -190,20 +195,45 @@ void UnitDieBState::think()
 			}
 		}
 		// if all units from either faction are killed - auto-end the mission.
-		if (_parent->getSave()->getSide() == FACTION_PLAYER && Options::battleAutoEnd)
+		if (_parent->getSave()->getSide() == FACTION_PLAYER)
 		{
-			int liveAliens = 0;
-			int liveSoldiers = 0;
-			_parent->tallyUnits(liveAliens, liveSoldiers, false);
-
-			if (liveAliens == 0 || liveSoldiers == 0)
-			{
-				_parent->getSave()->setSelectedUnit(0);
-				_parent->cancelCurrentAction(true);
-				_parent->requestEndTurn();
-			}
+			_parent->autoEndBattle();
 		}
 	}
+	else if (_extraFrame == 1)
+	{
+		_extraFrame++;
+	}
+	else if (_unit->isOut())
+	{
+		_extraFrame = 1;
+		if (!_noSound && _damageType == DT_HE && _unit->getStatus() != STATUS_UNCONSCIOUS)
+		{
+			playDeathSound();
+		}
+		if (_unit->getStatus() == STATUS_UNCONSCIOUS && (_unit->getSpecialAbility() == SPECAB_EXPLODEONDEATH || _unit->getSpecialAbility() == SPECAB_BURN_AND_EXPLODE))
+		{
+			_unit->instaKill();
+		}
+		if (_unit->getTurnsSinceSpotted() < 255)
+		{
+			_unit->setTurnsSinceSpotted(255);
+		}
+		if (!_unit->getSpawnUnit().empty())
+		{
+			// converts the dead zombie to a chryssalid
+			_parent->convertUnit(_unit);
+		}
+		else if (!_noCorpse)
+		{
+			convertUnitToCorpse();
+		}
+		if (_unit == _parent->getSave()->getSelectedUnit())
+		{
+			_parent->getSave()->setSelectedUnit(0);
+		}
+	}
+	
 	_parent->getMap()->cacheUnit(_unit);
 }
 
@@ -219,19 +249,26 @@ void UnitDieBState::cancel()
  */
 void UnitDieBState::convertUnitToCorpse()
 {
-	_parent->getSave()->getBattleState()->showPsiButton(false);
 	Position lastPosition = _unit->getPosition();
+	int size = _unit->getArmor()->getSize();
+	bool dropItems = (_unit->hasInventory() &&
+		(!Options::weaponSelfDestruction ||
+		(_unit->getOriginalFaction() != FACTION_HOSTILE || _unit->getStatus() == STATUS_UNCONSCIOUS)));
+
+	if (!_noSound)
+	{
+		_parent->getSave()->getBattleState()->showPsiButton(false);
+	}
 	// remove the unconscious body item corresponding to this unit, and if it was being carried, keep track of what slot it was in
 	if (lastPosition != Position(-1,-1,-1))
 	{
 		_parent->getSave()->removeUnconsciousBodyItem(_unit);
 	}
-	int size = _unit->getArmor()->getSize();
-	BattleItem *itemToKeep = 0;
-	bool dropItems = !Options::weaponSelfDestruction || (_unit->getOriginalFaction() != FACTION_HOSTILE || _unit->getStatus() == STATUS_UNCONSCIOUS);
-	// move inventory from unit to the ground for non-large units
-	if (size == 1 && dropItems)
+
+	// move inventory from unit to the ground
+	if (dropItems)
 	{
+		std::vector<BattleItem*> itemsToKeep;
 		for (std::vector<BattleItem*>::iterator i = _unit->getInventory()->begin(); i != _unit->getInventory()->end(); ++i)
 		{
 			_parent->dropItem(lastPosition, (*i));
@@ -241,15 +278,16 @@ void UnitDieBState::convertUnitToCorpse()
 			}
 			else
 			{
-				itemToKeep = *i;
+				itemsToKeep.push_back(*i);
 			}
 		}
-	}
-	_unit->getInventory()->clear();
 
-	if (itemToKeep != 0)
-	{
-		_unit->getInventory()->push_back(itemToKeep);
+		_unit->getInventory()->clear();
+
+		for (std::vector<BattleItem*>::iterator i = itemsToKeep.begin(); i != itemsToKeep.end(); ++i)
+		{
+			_unit->getInventory()->push_back(*i);
+		}
 	}
 
 	// remove unit-tile link
@@ -262,7 +300,7 @@ void UnitDieBState::convertUnitToCorpse()
 		{
 			if ((*it)->getUnit() == _unit)
 			{
-				RuleItem *corpseRules = _parent->getRuleset()->getItem(_unit->getArmor()->getCorpseBattlescape()[0]); // we're in an inventory, so we must be a 1x1 unit
+				RuleItem *corpseRules = _parent->getMod()->getItem(_unit->getArmor()->getCorpseBattlescape()[0], true); // we're in an inventory, so we must be a 1x1 unit
 				(*it)->convertToCorpse(corpseRules);
 				break;
 			}
@@ -271,19 +309,19 @@ void UnitDieBState::convertUnitToCorpse()
 	}
 	else
 	{
-		int i = 0;
-		for (int y = 0; y < size; y++)
+		int i = size * size - 1;
+		for (int y = size - 1; y >= 0; --y)
 		{
-			for (int x = 0; x < size; x++)
+			for (int x = size - 1; x >= 0; --x)
 			{
-				BattleItem *corpse = new BattleItem(_parent->getRuleset()->getItem(_unit->getArmor()->getCorpseBattlescape()[i]), _parent->getSave()->getCurrentItemId());
+				BattleItem *corpse = new BattleItem(_parent->getMod()->getItem(_unit->getArmor()->getCorpseBattlescape()[i], true), _parent->getSave()->getCurrentItemId());
 				corpse->setUnit(_unit);
 				if (_parent->getSave()->getTile(lastPosition + Position(x,y,0))->getUnit() == _unit) // check in case unit was displaced by another unit
 				{
 					_parent->getSave()->getTile(lastPosition + Position(x,y,0))->setUnit(0);
 				}
 				_parent->dropItem(lastPosition + Position(x,y,0), corpse, true);
-				i++;
+				--i;
 			}
 		}
 	}
@@ -294,17 +332,14 @@ void UnitDieBState::convertUnitToCorpse()
  */
 void UnitDieBState::playDeathSound()
 {
-	if ((_unit->getType() == "SOLDIER" && _unit->getGender() == GENDER_MALE) || _unit->getType() == "MALE_CIVILIAN")
+	const std::vector<int> &sounds = _unit->getDeathSounds();
+	if (!sounds.empty())
 	{
-		_parent->getResourcePack()->getSound("BATTLE.CAT", RNG::generate(41,43))->play();
-	}
-	else if ((_unit->getType() == "SOLDIER" && _unit->getGender() == GENDER_FEMALE) || _unit->getType() == "FEMALE_CIVILIAN")
-	{
-		_parent->getResourcePack()->getSound("BATTLE.CAT", RNG::generate(44,46))->play();
-	}
-	else
-	{
-		_parent->getResourcePack()->getSound("BATTLE.CAT", _unit->getDeathSound())->play();
+		int i = sounds[RNG::generate(0, sounds.size() - 1)];
+		if (i >= 0)
+		{
+			_parent->getMod()->getSoundByDepth(_parent->getDepth(), i)->play(-1, _parent->getMap()->getSoundAngle(_unit->getPosition()));
+		}
 	}
 }
 

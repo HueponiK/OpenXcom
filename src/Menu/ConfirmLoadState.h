@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,9 +17,6 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_CONFIRMLOADSTATE_H
-#define OPENXCOM_CONFIRMLOADSTATE_H
-
 #include "../Engine/State.h"
 #include <string>
 #include "OptionsBaseState.h"
@@ -43,7 +41,7 @@ private:
 	Text *_txtText;
 public:
 	/// Creates a new confirmation state.
-	ConfirmLoadState(OptionsOrigin origin, std::string fileName);
+	ConfirmLoadState(OptionsOrigin origin, const std::string &fileName);
 	/// Cleans up the confirmation state.
 	virtual ~ConfirmLoadState();
 	/// Handler for clicking the Yes button.
@@ -53,4 +51,3 @@ public:
 };
 
 }
-#endif

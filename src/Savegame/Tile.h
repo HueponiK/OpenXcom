@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,13 +17,10 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_TILE_H
-#define OPENXCOM_TILE_H
-
-#include <string>
+#include <list>
 #include <vector>
 #include "../Battlescape/Position.h"
-#include "../Ruleset/MapData.h"
+#include "../Mod/MapData.h"
 #include "BattleUnit.h"
 
 #include <SDL_types.h> // for Uint8
@@ -35,6 +33,7 @@ class MapData;
 class BattleUnit;
 class BattleItem;
 class RuleInventory;
+class Particle;
 
 /**
  * Basic element of which a battle map is build.
@@ -43,7 +42,7 @@ class RuleInventory;
 class Tile
 {
 public:
-	static struct SerializationKey 
+	static struct SerializationKey
 	{
 		// how many bytes to store for each variable or each member of array of the same name
 		Uint8 index; // for indexing the actual tile array
@@ -51,7 +50,7 @@ public:
 		Uint8 _mapDataID;
 		Uint8 _smoke;
 		Uint8 _fire;
-        Uint8 boolFields;
+		Uint8 boolFields;
 		Uint32 totalBytes; // per structure, including any data not mentioned here and accounting for all array members!
 	} serializationKey;
 	
@@ -68,6 +67,7 @@ protected:
 	int _smoke;
 	int _fire;
 	int _explosive;
+	int _explosiveType;
 	Position _pos;
 	BattleUnit *_unit;
 	std::vector<BattleItem *> _inventory;
@@ -78,9 +78,10 @@ protected:
 	int _TUMarker;
 	int _overlaps;
 	bool _danger;
+	std::list<Particle*> _particles;
 public:
 	/// Creates a tile.
-	Tile(const Position& pos);
+	Tile(Position pos);
 	/// Cleans up a tile.
 	~Tile();
 	/// Load the tile from yaml
@@ -99,10 +100,6 @@ public:
 	 */
 	MapData *getMapData(int part) const
 	{
-		if (0 > part || 3 < part)
-		{
-			return NULL;
-		}
 		return _objects[part];
 	}
 
@@ -125,7 +122,7 @@ public:
 	 * Gets the tile's position.
 	 * @return position
 	 */
-	const Position& getPosition() const
+	Position getPosition() const
 	{
 		return _pos;
 	}
@@ -159,13 +156,15 @@ public:
 	/// Get the shade amount.
 	int getShade() const;
 	/// Destroy a tile part.
-	bool destroy(int part);
+	bool destroy(int part, SpecialTileType type);
 	/// Damage a tile part.
-	bool damage(int part, int power);
+	bool damage(int part, int power, SpecialTileType type);
 	/// Set a "virtual" explosive on this tile, to detonate later.
-	void setExplosive(int power, bool force = false);
+	void setExplosive(int power, int damageType, bool force = false);
 	/// Get explosive power of this tile.
 	int getExplosive() const;
+	/// Get explosive power of this tile.
+	int getExplosiveType() const;
 	/// Animated the tile parts.
 	void animate();
 	/// Get object sprites.
@@ -194,6 +193,10 @@ public:
 	int getFlammability() const;
 	/// Get turns to burn
 	int getFuel() const;
+	/// Get flammability of part.
+	int getFlammability(int part) const;
+	/// Get turns to burn of part
+	int getFuel(int part) const;
 	/// attempt to set the tile on fire, sets overlaps to one if successful.
 	void ignite(int power);
 	/// Get fire and smoke animation offset.
@@ -205,17 +208,17 @@ public:
 	/// Get top-most item
 	int getTopItemSprite();
 	/// New turn preparations.
-	void prepareNewTurn();
+	void prepareNewTurn(bool smokeDamage);
 	/// Get inventory on this tile.
 	std::vector<BattleItem *> *getInventory();
 	/// Set the tile marker color.
 	void setMarkerColor(int color);
 	/// Get the tile marker color.
-	int getMarkerColor();
+	int getMarkerColor() const;
 	/// Set the tile visible flag.
 	void setVisible(int visibility);
 	/// Get the tile visible flag.
-	int getVisible();
+	int getVisible() const;
 	/// set the direction (used for path previewing)
 	void setPreview(int dir);
 	/// retrieve the direction stored by the pathfinding.
@@ -229,12 +232,14 @@ public:
 	/// increment the overlap value on this tile.
 	void addOverlap();
 	/// set the danger flag on this tile (so the AI will avoid it).
-	void setDangerous();
+	void setDangerous(bool danger);
 	/// check the danger flag on this tile.
-	bool getDangerous();
+	bool getDangerous() const;
+	/// adds a particle to this tile's array.
+	void addParticle(Particle *particle);
+	/// gets a pointer to this tile's particle array.
+	std::list<Particle *> *getParticleCloud();
 
 };
 
 }
-
-#endif

@@ -1,5 +1,6 @@
+#pragma once
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,12 +17,8 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef OPENXCOM_INVENTORYSTATE_H
-#define OPENXCOM_INVENTORYSTATE_H
-
 #include "../Engine/State.h"
 #include "../Interface/TextButton.h"
-#include "../Savegame/BattleItem.h"
 #include "../Savegame/EquipmentLayoutItem.h"
 
 
@@ -35,6 +32,7 @@ class Inventory;
 class SavedBattleGame;
 class BattlescapeState;
 class BattleUnit;
+class BattlescapeButton;
 
 /**
  * Screen which displays soldier's inventory.
@@ -44,8 +42,8 @@ class InventoryState : public State
 private:
 	Surface *_bg, *_soldier;
 	Text *_txtName, *_txtItem, *_txtAmmo, *_txtWeight, *_txtTus, *_txtFAcc, *_txtReact, *_txtPSkill, *_txtPStr;
-	InteractiveSurface *_btnOk, *_btnPrev, *_btnNext, *_btnUnload, *_btnGround, *_btnRank;
-	InteractiveSurface *_btnCreateTemplate, *_btnApplyTemplate;
+	BattlescapeButton *_btnOk, *_btnPrev, *_btnNext, *_btnUnload, *_btnGround, *_btnRank;
+	BattlescapeButton *_btnCreateTemplate, *_btnApplyTemplate;
 	Surface *_selAmmo;
 	Inventory *_inv;
 	std::vector<EquipmentLayoutItem*> _curInventoryTemplate;
@@ -82,6 +80,8 @@ public:
 	void btnApplyTemplateClick(Action *action);
 	/// Handler for hitting the Clear Inventory hotkey.
 	void onClearInventory(Action *action);
+	/// Handler for hitting the Autoequip hotkey.
+	void onAutoequip(Action *action);
 	/// Handler for clicking on the inventory.
 	void invClick(Action *action);
 	/// Handler for showing item info.
@@ -103,5 +103,3 @@ private:
 };
 
 }
-
-#endif

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -16,29 +16,27 @@
  * You should have received a copy of the GNU General Public License
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
-#define _USE_MATH_DEFINES
-#include <cmath>
+#include <algorithm>
 #include "ProjectileFlyBState.h"
 #include "ExplosionBState.h"
 #include "Projectile.h"
 #include "TileEngine.h"
 #include "Map.h"
 #include "Pathfinding.h"
-#include "../Engine/Game.h"
 #include "../Savegame/BattleUnit.h"
 #include "../Savegame/BattleItem.h"
-#include "../Savegame/SavedGame.h"
 #include "../Savegame/SavedBattleGame.h"
 #include "../Savegame/Tile.h"
-#include "../Resource/ResourcePack.h"
+#include "../Mod/Mod.h"
 #include "../Engine/Sound.h"
-#include "../Ruleset/Armor.h"
-#include "../Ruleset/RuleItem.h"
+#include "../Mod/RuleItem.h"
 #include "../Engine/Options.h"
-#include "AlienBAIState.h"
+#include "AIModule.h"
 #include "Camera.h"
 #include "Explosion.h"
 #include "BattlescapeState.h"
+#include "../Savegame/BattleUnitStatistics.h"
+#include "../fmath.h"
 
 namespace OpenXcom
 {
@@ -87,8 +85,6 @@ void ProjectileFlyBState::init()
 	}
 
 	if (_parent->getPanicHandled() &&
-		_action.type != BA_HIT &&
-		_action.type != BA_STUN &&
 		_action.actor->getTimeUnits() < _action.TU)
 	{
 		_action.result = "STR_NOT_ENOUGH_TIME_UNITS";
@@ -120,17 +116,15 @@ void ProjectileFlyBState::init()
 			_parent->popState();
 			return;
 		}
+		_unit->lookAt(_action.target, _unit->getTurretType() != -1);
+		while (_unit->getStatus() == STATUS_TURNING)
+		{
+			_unit->turn();
+		}
 	}
-
-	// autoshot will default back to snapshot if it's not possible
-	if (weapon->getRules()->getAccuracyAuto() == 0 && _action.type == BA_AUTOSHOT)
-		_action.type = BA_SNAPSHOT;
-
-	// snapshot defaults to "hit" if it's a melee weapon
-	// (in case of reaction "shots" with a melee weapon)
-	if (weapon->getRules()->getBattleType() == BT_MELEE && _action.type == BA_SNAPSHOT)
-		_action.type = BA_HIT;
+	
 	Tile *endTile = _parent->getSave()->getTile(_action.target);
+	int distance = _parent->getTileEngine()->distance(_action.actor->getPosition(), _action.target);
 	switch (_action.type)
 	{
 	case BA_SNAPSHOT:
@@ -149,8 +143,25 @@ void ProjectileFlyBState::init()
 			_parent->popState();
 			return;
 		}
-		if (_parent->getTileEngine()->distance(_action.actor->getPosition(), _action.target) > weapon->getRules()->getMaxRange())
+		if (distance > weapon->getRules()->getMaxRange())
 		{
+			// special handling for short ranges and diagonals
+			if (_action.actor->directionTo(_action.target) % 2 == 1)
+			{
+				// special handling for maxRange 1: allow it to target diagonally adjacent tiles, even though they are technically 2 tiles away.
+				if (weapon->getRules()->getMaxRange() == 1
+					&& distance == 2)
+				{
+					break;
+				}
+				// special handling for maxRange 2: allow it to target diagonally adjacent tiles on a level above/below, even though they are technically 3 tiles away.
+				else if (weapon->getRules()->getMaxRange() == 2
+					&& distance == 3
+					&& _action.target.z != _action.actor->getPosition().z)
+				{
+					break;
+				}
+			}
 			// out of range
 			_action.result = "STR_OUT_OF_RANGE";
 			_parent->popState();
@@ -173,19 +184,6 @@ void ProjectileFlyBState::init()
 		}
 		_projectileItem = weapon;
 		break;
-	case BA_HIT:
-		if (!_parent->getTileEngine()->validMeleeRange(_action.actor->getPosition(), _action.actor->getDirection(), _action.actor, 0, &_action.target))
-		{
-			_action.result = "STR_THERE_IS_NO_ONE_THERE";
-			_parent->popState();
-			return;
-		}
-		performMeleeAttack();
-		return;
-	case BA_PANIC:
-	case BA_MINDCONTROL:
-		_parent->statePushFront(new ExplosionBState(_parent, Position((_action.target.x*16)+8,(_action.target.y*16)+8,(_action.target.z*24)+10), weapon, _action.actor));
-		return;
 	default:
 		_parent->popState();
 		return;
@@ -218,7 +216,9 @@ void ProjectileFlyBState::init()
 		Tile *targetTile = _parent->getSave()->getTile(_action.target);
 		Position hitPos;
 		Position originVoxel = _parent->getTileEngine()->getOriginVoxel(_action, _parent->getSave()->getTile(_origin));
-		if (targetTile->getUnit() != 0)
+		if (targetTile->getUnit() &&
+			((_unit->getFaction() != FACTION_PLAYER) ||
+			targetTile->getUnit()->getVisible()))
 		{
 			if (_origin == _action.target || targetTile->getUnit() == _unit)
 			{
@@ -227,33 +227,36 @@ void ProjectileFlyBState::init()
 			}
 			else
 			{
-				_parent->getTileEngine()->canTargetUnit(&originVoxel, targetTile, &_targetVoxel, _unit);
+				if (!_parent->getTileEngine()->canTargetUnit(&originVoxel, targetTile, &_targetVoxel, _unit))
+				{
+					_targetVoxel = Position(-16,-16,-24); // out of bounds, even after voxel to tile calculation.
+				}
 			}
 		}
-		else if (targetTile->getMapData(MapData::O_OBJECT) != 0)
+		else if (targetTile->getMapData(O_OBJECT) != 0)
 		{
-			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, MapData::O_OBJECT, &_targetVoxel, _unit))
+			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, O_OBJECT, &_targetVoxel, _unit))
 			{
 				_targetVoxel = Position(_action.target.x*16 + 8, _action.target.y*16 + 8, _action.target.z*24 + 10);
 			}
 		}
-		else if (targetTile->getMapData(MapData::O_NORTHWALL) != 0)
+		else if (targetTile->getMapData(O_NORTHWALL) != 0)
 		{
-			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, MapData::O_NORTHWALL, &_targetVoxel, _unit))
+			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, O_NORTHWALL, &_targetVoxel, _unit))
 			{
 				_targetVoxel = Position(_action.target.x*16 + 8, _action.target.y*16, _action.target.z*24 + 9);
 			}
 		}
-		else if (targetTile->getMapData(MapData::O_WESTWALL) != 0)
+		else if (targetTile->getMapData(O_WESTWALL) != 0)
 		{
-			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, MapData::O_WESTWALL, &_targetVoxel, _unit))
+			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, O_WESTWALL, &_targetVoxel, _unit))
 			{
 				_targetVoxel = Position(_action.target.x*16, _action.target.y*16 + 8, _action.target.z*24 + 9);
 			}
 		}
-		else if (targetTile->getMapData(MapData::O_FLOOR) != 0)
+		else if (targetTile->getMapData(O_FLOOR) != 0)
 		{
-			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, MapData::O_FLOOR, &_targetVoxel, _unit))
+			if (!_parent->getTileEngine()->canTargetTile(&originVoxel, targetTile, O_FLOOR, &_targetVoxel, _unit))
 			{
 				_targetVoxel = Position(_action.target.x*16 + 8, _action.target.y*16 + 8, _action.target.z*24 + 2);
 			}
@@ -264,7 +267,7 @@ void ProjectileFlyBState::init()
 			_targetVoxel = Position(_action.target.x*16 + 8, _action.target.y*16 + 8, _action.target.z*24 + 12);
 		}
 	}
-	if(createNewProjectile())
+	if (createNewProjectile())
 	{
 		_parent->getMap()->setCursorType(CT_NONE);
 		_parent->getMap()->getCamera()->stopMouseScrolling();
@@ -279,18 +282,9 @@ void ProjectileFlyBState::init()
 bool ProjectileFlyBState::createNewProjectile()
 {
 	++_action.autoShotCounter;
-	
-	int bulletSprite = -1;
-	if (_action.type != BA_THROW)
-	{
-		bulletSprite = _ammo->getRules()->getBulletSprite();
-		if (bulletSprite == -1)
-		{
-			bulletSprite = _action.weapon->getRules()->getBulletSprite();
-		}
-	}
+
 	// create a new projectile
-	Projectile *projectile = new Projectile(_parent->getResourcePack(), _parent->getSave(), _action, _origin, _targetVoxel, bulletSprite);
+	Projectile *projectile = new Projectile(_parent->getMod(), _parent->getSave(), _action, _origin, _targetVoxel, _ammo);
 
 	// add the projectile on the map
 	_parent->getMap()->setProjectile(projectile);
@@ -300,9 +294,17 @@ bool ProjectileFlyBState::createNewProjectile()
 
 	// let it calculate a trajectory
 	_projectileImpact = V_EMPTY;
+
+	double accuracyDivider = 100.0;
+	// berserking units are half as accurate
+	if (!_parent->getPanicHandled())
+	{
+		accuracyDivider = 200.0;
+	}
+
 	if (_action.type == BA_THROW)
 	{
-		_projectileImpact = projectile->calculateThrow(_unit->getThrowingAccuracy() / 100.0);
+		_projectileImpact = projectile->calculateThrow(_unit->getThrowingAccuracy() / accuracyDivider);
 		if (_projectileImpact == V_FLOOR || _projectileImpact == V_UNIT || _projectileImpact == V_OBJECT)
 		{
 			if (_unit->getFaction() != FACTION_PLAYER && _projectileItem->getRules()->getBattleType() == BT_GRENADE)
@@ -312,7 +314,7 @@ bool ProjectileFlyBState::createNewProjectile()
 			_projectileItem->moveToOwner(0);
 			_unit->setCache(0);
 			_parent->getMap()->cacheUnit(_unit);
-			_parent->getResourcePack()->getSound("BATTLE.CAT", 39)->play();
+			_parent->getMod()->getSoundByDepth(_parent->getDepth(), Mod::ITEM_THROW)->play(-1, _parent->getMap()->getSoundAngle(_unit->getPosition()));
 			_unit->addThrowingExp();
 		}
 		else
@@ -328,7 +330,7 @@ bool ProjectileFlyBState::createNewProjectile()
 	}
 	else if (_action.weapon->getRules()->getArcingShot()) // special code for the "spit" trajectory
 	{
-		_projectileImpact = projectile->calculateThrow(_unit->getFiringAccuracy(_action.type, _action.weapon) / 100.0);
+		_projectileImpact = projectile->calculateThrow(_unit->getFiringAccuracy(_action.type, _action.weapon) / accuracyDivider);
 		if (_projectileImpact != V_EMPTY && _projectileImpact != V_OUTOFBOUNDS)
 		{
 			// set the soldier in an aiming position
@@ -338,11 +340,11 @@ bool ProjectileFlyBState::createNewProjectile()
 			// and we have a lift-off
 			if (_ammo->getRules()->getFireSound() != -1)
 			{
-				_parent->getResourcePack()->getSound("BATTLE.CAT", _ammo->getRules()->getFireSound())->play();
+				_parent->getMod()->getSoundByDepth(_parent->getDepth(), _ammo->getRules()->getFireSound())->play(-1, _parent->getMap()->getSoundAngle(_unit->getPosition()));
 			}
 			else if (_action.weapon->getRules()->getFireSound() != -1)
 			{
-				_parent->getResourcePack()->getSound("BATTLE.CAT", _action.weapon->getRules()->getFireSound())->play();
+				_parent->getMod()->getSoundByDepth(_parent->getDepth(), _action.weapon->getRules()->getFireSound())->play(-1, _parent->getMap()->getSoundAngle(_unit->getPosition()));
 			}
 			if (!_parent->getSave()->getDebugMode() && _action.type != BA_LAUNCH && _ammo->spendBullet() == false)
 			{
@@ -355,7 +357,14 @@ bool ProjectileFlyBState::createNewProjectile()
 			// no line of fire
 			delete projectile;
 			_parent->getMap()->setProjectile(0);
-			_action.result = "STR_NO_LINE_OF_FIRE";
+			if (_parent->getPanicHandled())
+			{
+				_action.result = "STR_NO_LINE_OF_FIRE";
+			}
+			else
+			{
+				_unit->setTimeUnits(_unit->getTimeUnits() + _action.TU); // refund shot TUs for berserking
+			}
 			_unit->abortTurn();
 			_parent->popState();
 			return false;
@@ -365,13 +374,13 @@ bool ProjectileFlyBState::createNewProjectile()
 	{
 		if (_originVoxel != Position(-1,-1,-1))
 		{
-			_projectileImpact = projectile->calculateTrajectory(_unit->getFiringAccuracy(_action.type, _action.weapon) / 100.0, _originVoxel);
+			_projectileImpact = projectile->calculateTrajectory(_unit->getFiringAccuracy(_action.type, _action.weapon) / accuracyDivider, _originVoxel, false);
 		}
 		else
 		{
-			_projectileImpact = projectile->calculateTrajectory(_unit->getFiringAccuracy(_action.type, _action.weapon) / 100.0);
+			_projectileImpact = projectile->calculateTrajectory(_unit->getFiringAccuracy(_action.type, _action.weapon) / accuracyDivider);
 		}
-		if (_projectileImpact != V_EMPTY || _action.type == BA_LAUNCH)
+		if (_targetVoxel != Position(-16,-16,-24) && (_projectileImpact != V_EMPTY || _action.type == BA_LAUNCH))
 		{
 			// set the soldier in an aiming position
 			_unit->aim(true);
@@ -380,11 +389,11 @@ bool ProjectileFlyBState::createNewProjectile()
 			// and we have a lift-off
 			if (_ammo->getRules()->getFireSound() != -1)
 			{
-				_parent->getResourcePack()->getSound("BATTLE.CAT", _ammo->getRules()->getFireSound())->play();
+				_parent->getMod()->getSoundByDepth(_parent->getDepth(), _ammo->getRules()->getFireSound())->play(-1, _parent->getMap()->getSoundAngle(projectile->getOrigin()));
 			}
 			else if (_action.weapon->getRules()->getFireSound() != -1)
 			{
-				_parent->getResourcePack()->getSound("BATTLE.CAT", _action.weapon->getRules()->getFireSound())->play();
+				_parent->getMod()->getSoundByDepth(_parent->getDepth(), _action.weapon->getRules()->getFireSound())->play(-1, _parent->getMap()->getSoundAngle(projectile->getOrigin()));
 			}
 			if (!_parent->getSave()->getDebugMode() && _action.type != BA_LAUNCH && _ammo->spendBullet() == false)
 			{
@@ -397,12 +406,23 @@ bool ProjectileFlyBState::createNewProjectile()
 			// no line of fire
 			delete projectile;
 			_parent->getMap()->setProjectile(0);
-			_action.result = "STR_NO_LINE_OF_FIRE";
+			if (_parent->getPanicHandled())
+			{
+				_action.result = "STR_NO_LINE_OF_FIRE";
+			}
+			else
+			{
+				_unit->setTimeUnits(_unit->getTimeUnits() + _action.TU); // refund shot TUs for berserking
+			}
 			_unit->abortTurn();
 			_parent->popState();
 			return false;
 		}
 	}
+	
+	if (_action.type != BA_THROW && _action.type != BA_LAUNCH)
+		_unit->getStatistics()->shotsFiredCounter++;
+
 	return true;
 }
 
@@ -420,7 +440,7 @@ void ProjectileFlyBState::think()
 		Tile *t = _parent->getSave()->getTile(_action.actor->getPosition());
 		Tile *bt = _parent->getSave()->getTile(_action.actor->getPosition() + Position(0,0,-1));
 		bool hasFloor = t && !t->hasNoFloor(bt);
-		bool unitCanFly = _action.actor->getArmor()->getMovementType() == MT_FLY;
+		bool unitCanFly = _action.actor->getMovementType() == MT_FLY;
 
 		if (_action.type == BA_AUTOSHOT
 			&& _action.autoShotCounter < _action.weapon->getRules()->getAutoShots()
@@ -437,16 +457,16 @@ void ProjectileFlyBState::think()
 		}
 		else
 		{
-			if (_action.cameraPosition.z != -1)
+			if (_action.cameraPosition.z != -1 && _action.waypoints.size() <= 1)
 			{
 				_parent->getMap()->getCamera()->setMapOffset(_action.cameraPosition);
 				_parent->getMap()->invalidate();
 			}
-			if (_action.type != BA_PANIC && _action.type != BA_MINDCONTROL && !_parent->getSave()->getUnitsFalling())
+			if (!_parent->getSave()->getUnitsFalling() && _parent->getPanicHandled())
 			{
 				_parent->getTileEngine()->checkReactionFire(_unit);
 			}
-			if (!_unit->isOut() && _action.type != BA_HIT)
+			if (!_unit->isOut())
 			{
 				_unit->abortTurn();
 			}
@@ -454,6 +474,7 @@ void ProjectileFlyBState::think()
 			{
 				_parent->setupCursor();
 			}
+			_parent->convertInfected();
 			_parent->popState();
 		}
 	}
@@ -464,11 +485,12 @@ void ProjectileFlyBState::think()
 			// shotgun pellets move to their terminal location instantly as fast as possible
 			_parent->getMap()->getProjectile()->skipTrajectory();
 		}
-		if(!_parent->getMap()->getProjectile()->move())
+		if (!_parent->getMap()->getProjectile()->move())
 		{
 			// impact !
 			if (_action.type == BA_THROW)
 			{
+				_parent->getMap()->resetCameraSmoothing();
 				Position pos = _parent->getMap()->getProjectile()->getPosition(-1);
 				pos.x /= 16;
 				pos.y /= 16;
@@ -482,7 +504,7 @@ void ProjectileFlyBState::think()
 					pos.x--;
 				}
 				BattleItem *item = _parent->getMap()->getProjectile()->getItem();
-				_parent->getResourcePack()->getSound("BATTLE.CAT", 38)->play();
+				_parent->getMod()->getSoundByDepth(_parent->getDepth(), Mod::ITEM_DROP)->play(-1, _parent->getMap()->getSoundAngle(pos));
 
 				if (Options::battleInstantGrenade && item->getRules()->getBattleType() == BT_GRENADE && item->getFuseTimer() == 0)
 				{
@@ -498,7 +520,7 @@ void ProjectileFlyBState::think()
 					}
 				}
 			}
-			else if (_action.type == BA_LAUNCH && _action.waypoints.size() > 1 && _projectileImpact == -1)
+			else if (_action.type == BA_LAUNCH && _action.waypoints.size() > 1 && _projectileImpact == V_EMPTY)
 			{
 				_origin = _action.waypoints.front();
 				_action.waypoints.pop_front();
@@ -515,6 +537,12 @@ void ProjectileFlyBState::think()
 			}
 			else
 			{
+				if (_parent->getSave()->getTile(_action.target)->getUnit())
+				{
+					_parent->getSave()->getTile(_action.target)->getUnit()->getStatistics()->shotAtCounter++; // Only counts for guns, not throws or launches
+				}
+
+				_parent->getMap()->resetCameraSmoothing();
 				if (_ammo && _action.type == BA_LAUNCH && _ammo->spendBullet() == false)
 				{
 					_parent->getSave()->removeItem(_ammo);
@@ -529,57 +557,56 @@ void ProjectileFlyBState::think()
 					{
 						offset = -2;
 					}
+
 					_parent->statePushFront(new ExplosionBState(_parent, _parent->getMap()->getProjectile()->getPosition(offset), _ammo, _action.actor, 0, (_action.type != BA_AUTOSHOT || _action.autoShotCounter == _action.weapon->getRules()->getAutoShots() || !_action.weapon->getAmmoItem())));
 
+					if (_projectileImpact == V_UNIT)
+					{
+						projectileHitUnit(_parent->getMap()->getProjectile()->getPosition(offset));
+					}
+
+					int firingXP = _unit->getFiringXP();
 					// special shotgun behaviour: trace extra projectile paths, and add bullet hits at their termination points.
 					if (_ammo && _ammo->getRules()->getShotgunPellets()  != 0)
 					{
 						int i = 1;
-						int bulletSprite = _ammo->getRules()->getBulletSprite();
-						if (bulletSprite == -1)
-						{
-							bulletSprite = _action.weapon->getRules()->getBulletSprite();
-						}
 						while (i != _ammo->getRules()->getShotgunPellets())
 						{
 							// create a projectile
-							Projectile *proj = new Projectile(_parent->getResourcePack(), _parent->getSave(), _action, _origin, _targetVoxel, bulletSprite);
+							Projectile *proj = new Projectile(_parent->getMod(), _parent->getSave(), _action, _origin, _targetVoxel, _ammo);
 							// let it trace to the point where it hits
-							_projectileImpact = proj->calculateTrajectory(std::max(0.0, (_unit->getFiringAccuracy(_action.type, _action.weapon) / 100.0) - i * 5.0));
-							if (_projectileImpact != V_EMPTY)
+							int secondaryImpact = proj->calculateTrajectory(std::max(0.0, (_unit->getFiringAccuracy(_action.type, _action.weapon) / 100.0) - i * 5.0));
+							if (secondaryImpact != V_EMPTY)
 							{
 								// as above: skip the shot to the end of it's path
 								proj->skipTrajectory();
-								// insert an explosion and hit 
-								if (_projectileImpact != V_OUTOFBOUNDS)
+								// insert an explosion and hit
+								if (secondaryImpact != V_OUTOFBOUNDS)
 								{
-									Explosion *explosion = new Explosion(proj->getPosition(1), _ammo->getRules()->getHitAnimation(), false, false);
+									if (secondaryImpact == V_UNIT)
+									{
+										projectileHitUnit(proj->getPosition(offset));
+									}
+									Explosion *explosion = new Explosion(proj->getPosition(offset), _ammo->getRules()->getHitAnimation());
 									_parent->getMap()->getExplosions()->push_back(explosion);
-									_parent->getSave()->getTileEngine()->hit(proj->getPosition(1), _ammo->getRules()->getPower(), _ammo->getRules()->getDamageType(), 0);
+									if (_ammo->getRules()->getExplosionRadius() != 0)
+									{
+										_parent->getTileEngine()->explode(proj->getPosition(offset), _ammo->getRules()->getPower(), _ammo->getRules()->getDamageType(), _ammo->getRules()->getExplosionRadius(), _unit);
+									}
+									else
+									{
+										_parent->getSave()->getTileEngine()->hit(proj->getPosition(offset), _ammo->getRules()->getPower(), _ammo->getRules()->getDamageType(), _unit);
+									}
 								}
-								++i;
 							}
+							++i;
 							delete proj;
 						}
 					}
-					// if the unit burns floortiles, burn floortiles
-					if (_unit->getSpecialAbility() == SPECAB_BURNFLOOR)
-					{
-						_parent->getSave()->getTile(_action.target)->ignite(15);
-					}
 
-					if (_projectileImpact == 4)
+					if (_unit->getFiringXP() > firingXP + 1)
 					{
-						BattleUnit *victim = _parent->getSave()->getTile(_parent->getMap()->getProjectile()->getPosition(offset) / Position(16,16,24))->getUnit();
-						if (victim && !victim->isOut() && victim->getFaction() == FACTION_HOSTILE)
-						{
-							AlienBAIState *aggro = dynamic_cast<AlienBAIState*>(victim->getCurrentAIState());
-							if (aggro != 0)
-							{
-								aggro->setWasHit();
-								_unit->setTurnsSinceSpotted(0);
-							}
-						}
+						_unit->nerfFiringXP(firingXP + 1);
 					}
 				}
 				else if (_action.type != BA_AUTOSHOT || _action.autoShotCounter == _action.weapon->getRules()->getAutoShots() || !_action.weapon->getAmmoItem())
@@ -606,7 +633,7 @@ void ProjectileFlyBState::cancel()
 	{
 		_parent->getMap()->getProjectile()->skipTrajectory();
 		Position p = _parent->getMap()->getProjectile()->getPosition();
-		if (!_parent->getMap()->getCamera()->isOnScreen(Position(p.x/16, p.y/16, p.z/24), false))
+		if (!_parent->getMap()->getCamera()->isOnScreen(Position(p.x/16, p.y/16, p.z/24), false, 0, false))
 			_parent->getMap()->getCamera()->centerOnPosition(Position(p.x/16, p.y/16, p.z/24));
 	}
 }
@@ -632,7 +659,7 @@ bool ProjectileFlyBState::validThrowRange(BattleAction *action, Position origin,
 	{
 		weight += action->weapon->getAmmoItem()->getRules()->getWeight();
 	}
-	double maxDistance = (getMaxThrowDistance(weight, action->actor->getStats()->strength, zd) + 8) / 16.0;
+	double maxDistance = (getMaxThrowDistance(weight, action->actor->getBaseStats()->strength, zd) + 8) / 16.0;
 	int xdiff = action->target.x - action->actor->getPosition().x;
 	int ydiff = action->target.y - action->actor->getPosition().y;
 	double realDistance = sqrt((double)(xdiff*xdiff)+(double)(ydiff*ydiff));
@@ -649,36 +676,36 @@ bool ProjectileFlyBState::validThrowRange(BattleAction *action, Position origin,
  */
 int ProjectileFlyBState::getMaxThrowDistance(int weight, int strength, int level)
 {
-    double curZ = level + 0.5;
-    double dz = 1.0;
-    int dist = 0;
-    while (dist < 4000) //just in case
-    {
-        dist += 8;
-        if (dz<-1)
-            curZ -= 8;
-        else
-            curZ += dz * 8;
+	double curZ = level + 0.5;
+	double dz = 1.0;
+	int dist = 0;
+	while (dist < 4000) //just in case
+	{
+		dist += 8;
+		if (dz<-1)
+			curZ -= 8;
+		else
+			curZ += dz * 8;
 
-        if (curZ < 0 && dz < 0) //roll back
-        {
-            dz = std::max(dz, -1.0);
-            if (abs(dz)>1e-10) //rollback horizontal
-                dist -= curZ / dz;
-            break;
-        }
-        dz -= (double)(50 * weight / strength)/100;
-        if (dz <= -2.0) //become falling
-            break;
-    }
-    return dist;
+		if (curZ < 0 && dz < 0) //roll back
+		{
+			dz = std::max(dz, -1.0);
+			if (std::abs(dz)>1e-10) //rollback horizontal
+				dist -= curZ / dz;
+			break;
+		}
+		dz -= (double)(50 * weight / strength)/100;
+		if (dz <= -2.0) //become falling
+			break;
+	}
+	return dist;
 }
 
 /**
  * Set the origin voxel, used for the blaster launcher.
  * @param pos the origin voxel.
  */
-void ProjectileFlyBState::setOriginVoxel(Position pos)
+void ProjectileFlyBState::setOriginVoxel(const Position& pos)
 {
 	_originVoxel = pos;
 }
@@ -691,32 +718,47 @@ void ProjectileFlyBState::targetFloor()
 	_targetFloor = true;
 }
 
-void ProjectileFlyBState::performMeleeAttack()
+void ProjectileFlyBState::projectileHitUnit(Position pos)
 {
-	BattleUnit *target = _parent->getSave()->getTile(_action.target)->getUnit();
-	int height = target->getFloatHeight() + (target->getHeight() / 2);
-	Position voxel;
-	_parent->getSave()->getPathfinding()->directionToVector(_unit->getDirection(), &voxel);
-	voxel = _action.target * Position(16, 16, 24) + Position(8,8,height - _parent->getSave()->getTile(_action.target)->getTerrainLevel()) - voxel;
-	// set the soldier in an aiming position
-	_unit->aim(true);
-	_unit->setCache(0);
-	_parent->getMap()->cacheUnit(_unit);
-	// and we have a lift-off
-	if (_ammo->getRules()->getMeleeAttackSound() != -1)
+	BattleUnit *victim = _parent->getSave()->getTile(pos / Position(16,16,24))->getUnit();
+	BattleUnit *targetVictim = _parent->getSave()->getTile(_action.target)->getUnit(); // Who we were aiming at (not necessarily who we hit)
+	if (victim && !victim->isOut())
 	{
-		_parent->getResourcePack()->getSound("BATTLE.CAT", _ammo->getRules()->getMeleeAttackSound())->play();
+		victim->getStatistics()->hitCounter++;
+		if (_unit->getOriginalFaction() == FACTION_PLAYER && victim->getOriginalFaction() == FACTION_PLAYER) 
+		{
+			victim->getStatistics()->shotByFriendlyCounter++;
+			_unit->getStatistics()->shotFriendlyCounter++;
+		}
+		if (victim == targetVictim) // Hit our target
+		{
+			_unit->getStatistics()->shotsLandedCounter++;
+			if (_parent->getTileEngine()->distance(_action.actor->getPosition(), victim->getPosition()) > 30)
+			{
+				_unit->getStatistics()->longDistanceHitCounter++;
+			}
+			if (_unit->getFiringAccuracy(_action.type, _action.weapon) < _parent->getTileEngine()->distance(_action.actor->getPosition(), victim->getPosition()))
+			{
+				_unit->getStatistics()->lowAccuracyHitCounter++;
+			}
+		}
+		if (victim->getFaction() == FACTION_HOSTILE)
+		{
+			AIModule *ai = victim->getAIModule();
+			if (ai != 0)
+			{
+				ai->setWasHitBy(_unit);
+				_unit->setTurnsSinceSpotted(0);
+			}
+		}
+		// Record the last unit to hit our victim. If a victim dies without warning*, this unit gets the credit.
+		// *Because the unit died in a fire or bled out.
+		victim->setMurdererId(_unit->getId());
+		if (_action.weapon != 0)
+			victim->setMurdererWeapon(_action.weapon->getRules()->getName());
+		if (_ammo != 0)
+			victim->setMurdererWeaponAmmo(_ammo->getRules()->getName());
 	}
-	else if (_action.weapon->getRules()->getMeleeAttackSound() != -1)
-	{
-		_parent->getResourcePack()->getSound("BATTLE.CAT", _action.weapon->getRules()->getMeleeAttackSound())->play();
-	}
-	if (!_parent->getSave()->getDebugMode() && _action.type != BA_LAUNCH && _ammo->spendBullet() == false)
-	{
-		_parent->getSave()->removeItem(_ammo);
-		_action.weapon->setAmmoItem(0);
-	}
-	_parent->getMap()->setCursorType(CT_NONE);
-	_parent->statePushNext(new ExplosionBState(_parent, voxel, _action.weapon, _action.actor, 0, true));
 }
+
 }

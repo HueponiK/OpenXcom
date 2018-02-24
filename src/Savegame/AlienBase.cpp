@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,7 +17,6 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "AlienBase.h"
-#include <sstream>
 #include "../Engine/Language.h"
 
 namespace OpenXcom
@@ -26,7 +25,7 @@ namespace OpenXcom
 /**
  * Initializes an alien base
  */
-AlienBase::AlienBase() : Target(), _id(0), _inBattlescape(false), _discovered(false)
+AlienBase::AlienBase(AlienDeployment *deployment) : Target(), _id(0), _inBattlescape(false), _discovered(false), _deployment(deployment)
 {
 }
 
@@ -63,6 +62,7 @@ YAML::Node AlienBase::save() const
 		node["inBattlescape"] = _inBattlescape;
 	if (_discovered)
 		node["discovered"] = _discovered;
+	node["deployment"] = _deployment->getType();
 	return node;
 }
 
@@ -73,7 +73,7 @@ YAML::Node AlienBase::save() const
 YAML::Node AlienBase::saveId() const
 {
 	YAML::Node node = Target::saveId();
-	node["type"] = "STR_ALIEN_BASE";
+	node["type"] = _deployment->getMarkerName();
 	node["id"] = _id;
 	return node;
 }
@@ -97,13 +97,24 @@ void AlienBase::setId(int id)
 }
 
 /**
- * Returns the alien base's unique identifying name.
+ * Returns the alien base's unique default name.
  * @param lang Language to get strings from.
  * @return Full name.
  */
-std::wstring AlienBase::getName(Language *lang) const
+std::wstring AlienBase::getDefaultName(Language *lang) const
 {
-	return lang->getString("STR_ALIEN_BASE_").arg(_id);
+	return lang->getString(_deployment->getMarkerName() + "_").arg(_id);
+}
+
+/**
+ * Returns the globe marker for the alien base.
+ * @return Marker sprite, -1 if none.
+ */
+int AlienBase::getMarker() const
+{
+	if (!_discovered)
+		return -1;
+	return _deployment->getMarkerIcon();
 }
 
 /**
@@ -158,6 +169,11 @@ bool AlienBase::isDiscovered() const
 void AlienBase::setDiscovered(bool discovered)
 {
 	_discovered = discovered;
+}
+
+AlienDeployment *AlienBase::getDeployment() const
+{
+	return _deployment;
 }
 
 }

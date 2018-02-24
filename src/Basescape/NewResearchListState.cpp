@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2014 OpenXcom Developers.
+ * Copyright 2010-2016 OpenXcom Developers.
  *
  * This file is part of OpenXcom.
  *
@@ -17,11 +17,9 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "NewResearchListState.h"
-#include <algorithm>
 #include "../Engine/Game.h"
-#include "../Resource/ResourcePack.h"
-#include "../Engine/Language.h"
-#include "../Engine/Palette.h"
+#include "../Mod/Mod.h"
+#include "../Engine/LocalizedText.h"
 #include "../Engine/Options.h"
 #include "../Interface/TextButton.h"
 #include "../Interface/Window.h"
@@ -29,10 +27,8 @@
 #include "../Interface/TextList.h"
 #include "../Savegame/SavedGame.h"
 #include "../Savegame/Base.h"
-#include "../Ruleset/RuleResearch.h"
-#include "../Ruleset/Ruleset.h"
+#include "../Mod/RuleResearch.h"
 #include "ResearchInfoState.h"
-#include "../Savegame/ItemContainer.h"
 
 namespace OpenXcom
 {
@@ -51,35 +47,30 @@ NewResearchListState::NewResearchListState(Base *base) : _base(base)
 	_lstResearch = new TextList(198, 88, 53, 54);
 
 	// Set palette
-	setPalette("PAL_BASESCAPE", 1);
+	setInterface("selectNewResearch");
 
-	add(_window);
-	add(_btnOK);
-	add(_txtTitle);
-	add(_lstResearch);
+	add(_window, "window", "selectNewResearch");
+	add(_btnOK, "button", "selectNewResearch");
+	add(_txtTitle, "text", "selectNewResearch");
+	add(_lstResearch, "list", "selectNewResearch");
 
 	centerAllSurfaces();
 
 	// Set up objects
-	_window->setColor(Palette::blockOffset(13)+10);
-	_window->setBackground(_game->getResourcePack()->getSurface("BACK05.SCR"));
+	_window->setBackground(_game->getMod()->getSurface("BACK05.SCR"));
 
-	_btnOK->setColor(Palette::blockOffset(15)+6);
 	_btnOK->setText(tr("STR_OK"));
 	_btnOK->onMouseClick((ActionHandler)&NewResearchListState::btnOKClick);
 	_btnOK->onKeyboardPress((ActionHandler)&NewResearchListState::btnOKClick, Options::keyCancel);
 
-	_txtTitle->setColor(Palette::blockOffset(13)+10);
 	_txtTitle->setAlign(ALIGN_CENTER);
 	_txtTitle->setText(tr("STR_NEW_RESEARCH_PROJECTS"));
 
-	_lstResearch->setColor(Palette::blockOffset(13));
 	_lstResearch->setColumns(1, 190);
 	_lstResearch->setSelectable(true);
 	_lstResearch->setBackground(_window);
 	_lstResearch->setMargin(8);
 	_lstResearch->setAlign(ALIGN_CENTER);
-	_lstResearch->setArrowColor(Palette::blockOffset(13)+10);
 	_lstResearch->onMouseClick((ActionHandler)&NewResearchListState::onSelectProject);
 }
 
@@ -113,17 +104,32 @@ void NewResearchListState::btnOKClick(Action *)
 /**
  * Fills the list with possible ResearchProjects.
  */
-void NewResearchListState::fillProjectList ()
+void NewResearchListState::fillProjectList()
 {
 	_projects.clear();
 	_lstResearch->clearList();
-	_game->getSavedGame()->getAvailableResearchProjects(_projects, _game->getRuleset() , _base);
+	// Note: this is the *only* place where this method is called with considerDebugMode = true
+	_game->getSavedGame()->getAvailableResearchProjects(_projects, _game->getMod() , _base, true);
 	std::vector<RuleResearch*>::iterator it = _projects.begin();
-	while (it != _projects.end ())
+	while (it != _projects.end())
 	{
+		// EXPLANATION
+		// -----------
+		// Projects with "requires" can only be discovered/researched indirectly
+		//  - this is because we can't reliably determine if they are unlocked or not
+		// Example:
+		//  - Alien Origins + Alien Leader => ALIEN_LEADER_PLUS is discovered
+		//  - Alien Leader + Alien Origins => ALIEN_LEADER_PLUS is NOT discovered (you need to research another alien leader/commander)
+		// If we wanted to allow also direct research of projects with "requires",
+		// we would need to implement a slightly more complicated unlocking algorithm
+		// and more importantly, we would need to remember the list of unlocked topics
+		// in the save file (currently this is not done, the list is calculated on-the-fly).
+		// Summary:
+		//  - it would be possible to remove this condition, but more refactoring would be needed
+		//  - for now, handling "requires" via zero-cost helpers (e.g. STR_LEADER_PLUS)... is enough
 		if ((*it)->getRequirements().empty())
 		{
-			_lstResearch->addRow(1, tr((*it)->getName ()).c_str());
+			_lstResearch->addRow(1, tr((*it)->getName()).c_str());
 			++it;
 		}
 		else
