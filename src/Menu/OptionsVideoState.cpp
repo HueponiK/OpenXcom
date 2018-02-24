@@ -117,6 +117,7 @@ OptionsVideoState::OptionsVideoState(OptionsOrigin origin) : OptionsBaseState(or
 
 	add(_txtOptions, "text", "videoMenu");
 	add(_btnLockMouse, "button", "videoMenu");
+	add(_btnRootWindowedMode, "button", "videoMenu");
 	add(_cbxScalingMode, "button", "videoMenu");
 
 	add(_cbxFilter, "button", "videoMenu");
