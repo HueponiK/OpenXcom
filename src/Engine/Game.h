@@ -51,8 +51,6 @@ private:
 	bool _quit, _init;
 	FpsCounter *_fpsCounter;
 	bool _mouseActive;
-	unsigned int _timeOfLastFrame;
-	int _timeUntilNextFrame;
 	static const double VOLUME_GRADIENT;
 
 public:
@@ -82,8 +80,6 @@ public:
 	void popState();
 	/// Gets the currently loaded language.
 	Language *getLanguage() const;
-	/// Loads a new language for the game.
-	void loadLanguage(const std::string &filename);
 	/// Gets the currently loaded saved game.
 	SavedGame *getSavedGame() const;
 	/// Sets a new saved game for the game.
@@ -98,8 +94,8 @@ public:
 	bool isState(State *state) const;
 	/// Returns whether the game is shutting down.
 	bool isQuitting() const;
-	/// Sets up the default language.
-	void defaultLanguage();
+	/// Loads the default and current language.
+	void loadLanguages();
 	/// Sets up the audio.
 	void initAudio();
 };

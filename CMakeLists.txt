@@ -1,26 +1,42 @@
+cmake_minimum_required ( VERSION 3.1 )
+
 project ( OpenXcom )
 
-cmake_minimum_required ( VERSION 2.8.5 )
 set ( CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/modules" )
 include(GNUInstallDirs)
+
+# For yaml-cpp
+set (CMAKE_CXX_STANDARD 11)
+
 
 option ( DEV_BUILD "Development Build. Disable this for release builds" ON )
 option ( BUILD_PACKAGE "Prepares build for creation of a package with CPack" ON )
 option ( ENABLE_WARNING "Always show warnings (even for release builds)" OFF )
 option ( FATAL_WARNING "Treat warnings as errors" OFF )
 option ( ENABLE_CLANG_ANALYSIS "When building with clang, enable the static analyzer" OFF )
+option ( CHECK_CCACHE "Check if ccache is installed and use it" OFF )
 set ( MSVC_WARNING_LEVEL 3 CACHE STRING "Visual Studio warning levels" )
 option ( FORCE_INSTALL_DATA_TO_BIN "Force installation of data to binary directory" OFF )
 set ( DATADIR "" CACHE STRING "Where to place datafiles" )
 set ( OPENXCOM_VERSION_STRING "" CACHE STRING "Version string (after x.x)" )
 
+if ( CHECK_CCACHE )
+  find_program( CCACHE_PROGRAM ccache )
+  if( NOT CCACHE_PROGRAM )
+    message ( "CCACHE requested but not found on the system." )
+  else ()
+    set_property( GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}" )
+    set_property( GLOBAL PROPERTY RULE_LAUNCH_LINK "${CCACHE_PROGRAM}" )
+    message ( "found CCACHE (${CCACHE_PROGRAM})" )
+  endif()
+endif ()
 
 if ( WIN32 )
   set ( default_deps_dir "${CMAKE_SOURCE_DIR}/deps" )
 endif ()
 
 if ( APPLE )
-  set ( MACOS_SDLMAIN_M_PATH "${CMAKE_SOURCE_DIR}" CACHE STRING "Path to SDLMain.m file" )
+  set ( MACOS_SDLMAIN_M_PATH "${CMAKE_SOURCE_DIR}/src/apple/SDLMain.m" CACHE STRING "Path to SDLMain.m file" )
   option ( CREATE_BUNDLE "Create a Mac OS application bundle" ON )
   if ( NOT EXISTS "${MACOS_SDLMAIN_M_PATH}" )
     message ( FATAL_ERROR "On Mac OS, SDLMain.m is required. Please set the MACOS_SDLMAIN_M_PATH variable" )
@@ -30,7 +46,7 @@ endif ()
 set ( DEPS_DIR "${default_deps_dir}" CACHE STRING "Dependencies directory" )
 
 # Add check for library (SDL_gfx, yaml-cpp )
-if ( IS_DIRECTORY ${DEPS_DIR} )
+if ( IS_DIRECTORY ${DEPS_DIR}/include )
    include_directories ( ${DEPS_DIR}/include/SDL ${DEPS_DIR}/include/yaml-cpp ${DEPS_DIR}/include )
    if ( CMAKE_CL_64 )
      link_directories ( ${DEPS_DIR}/lib/x64 )
@@ -43,9 +59,10 @@ if ( IS_DIRECTORY ${DEPS_DIR} )
    set ( SDLIMAGE_LIBRARY SDL_image )
    set ( YAMLCPP_LIBRARY yaml-cpp )
    set ( YAMLCPP_LIBRARY_DEBUG yaml-cppd )
+   add_definitions( -DYAML_CPP_DLL )
 else ( )
   find_package ( SDL2 COMPONENTS mixer gfx image)
-  find_package ( Yaml_cpp 0.5.0)
+  find_package ( Yaml_cpp 0.5.3)
   set ( YAMLCPP_LIBRARY_DEBUG ${YAMLCPP_LIBRARY} )
 
   if ( NOT SDL_FOUND )
@@ -85,6 +102,7 @@ else ( )
 endif()
 
 # Find OpenGL
+set (OpenGL_GL_PREFERENCE LEGACY)
 find_package ( OpenGL )
 if ( NOT OPENGL_FOUND )
   message ( WARNING "Can't find OpenGL; how does that even happen?\n"
@@ -93,6 +111,15 @@ if ( NOT OPENGL_FOUND )
   add_definitions(-D__NO_OPENGL)
 else ()
     include_directories ( ${OPENGL_INCLUDE_DIR} )
+    message ( "found openGL (${OPENGL_LIBRARIES})" )
+endif ()
+
+# Resolve backtraces
+if ( WIN32 )
+	link_libraries( dbghelp )
+endif ()
+if ( UNIX )
+	link_libraries( ${CMAKE_DL_LIBS} )
 endif ()
 
 # Read version number
