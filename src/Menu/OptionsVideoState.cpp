@@ -301,9 +301,9 @@ OptionsVideoState::OptionsVideoState(OptionsOrigin origin) : OptionsBaseState(or
 	scales.push_back(tr("STR_FULL_DISPLAY"));
 
 	std::vector<std::string> scalemodes;
-	scalemodes.push_back("STR_SCALINGMODE_EXPAND");
-	scalemodes.push_back("STR_SCALINGMODE_LETTERBOX");
-	scalemodes.push_back("STR_SCALINGMODE_STRETCH");
+	scalemodes.push_back(tr("STR_SCALINGMODE_EXPAND"));
+	scalemodes.push_back(tr("STR_SCALINGMODE_KEEPASPECT"));
+	scalemodes.push_back(tr("STR_SCALINGMODE_STRETCH"));
 
 	_cbxGeoScale->setOptions(scales);
 	_cbxGeoScale->setSelected(Options::geoscapeScale);

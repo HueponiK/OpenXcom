@@ -103,9 +103,9 @@ void CutsceneState::init()
 ScalingMode CutsceneState::initDisplay()
 {
 	ScalingMode scalingMode = (ScalingMode)Options::scalingMode;
-	if (Options::scalingMode == SCALINGMODE_EXPAND || Options::scalingMode == SCALINGMODE_LETTERBOX)
+	if (Options::scalingMode == SCALINGMODE_EXPAND || Options::scalingMode == SCALINGMODE_KEEPASPECT)
 	{
-		Options::scalingMode = SCALINGMODE_LETTERBOX;
+		Options::scalingMode = SCALINGMODE_KEEPASPECT;
 	}
 	Options::baseXResolution = Screen::ORIGINAL_WIDTH;
 	Options::baseYResolution = Screen::ORIGINAL_HEIGHT;

@@ -375,7 +375,7 @@ void Screen::resetDisplay(bool resetVideo)
 	_clear.h = getHeight();
 
 	bool cursorInBlackBands;
-	if (!(Options::scalingMode == SCALINGMODE_LETTERBOX))
+	if (!(Options::scalingMode == SCALINGMODE_KEEPASPECT))
 	{
 		cursorInBlackBands = false;
 	}
@@ -392,7 +392,7 @@ void Screen::resetDisplay(bool resetVideo)
 		cursorInBlackBands = Options::cursorInBlackBandsInBorderlessWindow;
 	}
 
-	if (_scaleX > _scaleY && Options::scalingMode == SCALINGMODE_LETTERBOX)
+	if (_scaleX > _scaleY && Options::scalingMode == SCALINGMODE_KEEPASPECT)
 	{
 		int targetWidth = (int)floor(_scaleY * (double)_baseWidth);
 		_topBlackBand = _bottomBlackBand = 0;
@@ -414,7 +414,7 @@ void Screen::resetDisplay(bool resetVideo)
 			_cursorLeftBlackBand = 0;
 		}
 	}
-	else if (_scaleY > _scaleX && Options::scalingMode == SCALINGMODE_LETTERBOX)
+	else if (_scaleY > _scaleX && Options::scalingMode == SCALINGMODE_KEEPASPECT)
 	{
 		int targetHeight = (int)floor(_scaleX * (double)_baseHeight * pixelRatioY);
 		_topBlackBand = (getHeight() - targetHeight) / 2;
