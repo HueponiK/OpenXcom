@@ -2208,7 +2208,7 @@ void BattlescapeState::resize(int &dX, int &dY)
 {
 	dX = Options::baseXResolution;
 	dY = Options::baseYResolution;
-	Screen::updateScale(Options::battlescapeScale, Options::battlescapeScale, Options::baseXBattlescape, Options::baseYBattlescape, true);
+	Screen::updateScale(Options::battlescapeScale, Options::baseXBattlescape, Options::baseYBattlescape, true);
 	dX = Options::baseXResolution - dX;
 	dY = Options::baseYResolution - dY;
 	_map->setWidth(Options::baseXResolution);

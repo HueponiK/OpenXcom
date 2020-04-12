@@ -2705,7 +2705,7 @@ void GeoscapeState::resize(int &dX, int &dY)
 		return;
 	dX = Options::baseXResolution;
 	dY = Options::baseYResolution;
-	Screen::updateScale(Options::geoscapeScale, Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
+	Screen::updateScale(Options::geoscapeScale, Options::baseXGeoscape, Options::baseYGeoscape, true);
 
 	dX = Options::baseXResolution - dX;
 	dY = Options::baseYResolution - dY;
