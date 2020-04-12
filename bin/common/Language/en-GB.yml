@@ -183,7 +183,7 @@ en-GB:
   STR_SCALINGMODE_STRETCH: "Stretch"
   STR_SCALE_MODE_DESC: "Scaling mode: Expand to current aspect ratio, keep original aspect ratio or stretch original image to new aspect ratio."
   STR_RESIZABLE: "Resizable"
-  STR_LOCK_MOUSE: "Grab Mouse"`
+  STR_LOCK_MOUSE: "Grab Mouse"
   STR_LOCK_MOUSE_DESC: "Keeps the mouse cursor from leaving the game window. Ctrl+G to toggle at any time."
   STR_FIXED_WINDOW_POSITION: "Fixed Window Position"
   STR_FIXED_WINDOW_POSITION_DESC: "Set fixed position to Window."

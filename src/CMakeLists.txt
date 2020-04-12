@@ -474,7 +474,6 @@ if ( WIN32 )
   if ( MINGW )
     set ( basic_windows_libs ${basic_windows_libs} mingw32 -mwindows )
     set ( static_flags  -static )
-    #set ( SDLMIXER_LIBRARY "${SDLMIXER_LIBRARY} -lwinmm" )
   endif ()
   if ( MSVC )
     set_target_properties ( openxcom
