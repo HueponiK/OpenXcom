@@ -474,7 +474,7 @@ if ( WIN32 )
   if ( MINGW )
     set ( basic_windows_libs ${basic_windows_libs} mingw32 -mwindows )
     set ( static_flags  -static )
-    set ( SDLMIXER_LIBRARY "${SDLMIXER_LIBRARY} -lwinmm" )
+    #set ( SDLMIXER_LIBRARY "${SDLMIXER_LIBRARY} -lwinmm" )
   endif ()
   if ( MSVC )
     set_target_properties ( openxcom
@@ -488,7 +488,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES FreeBSD OR ${CMAKE_SYSTEM_NAME} MATCHES NetBSD 
   set ( system_libs -lexecinfo )
 endif ()
 
-target_link_libraries ( openxcom ${system_libs} ${SDLIMAGE_LIBRARY} ${SDLMIXER_LIBRARY} ${SDLGFX_LIBRARY} ${SDL_LIBRARY} ${OPENGL_LIBRARIES} debug ${YAMLCPP_LIBRARY_DEBUG} optimized ${YAMLCPP_LIBRARY} )
+target_link_libraries ( openxcom ${system_libs} ${SDLIMAGE_LIBRARY} ${SDLMIXER_LIBRARY} ${SDLGFX_LIBRARY} ${SDL_LIBRARY} ${OPENGL_gl_LIBRARY} debug ${YAMLCPP_LIBRARY_DEBUG} optimized ${YAMLCPP_LIBRARY} -lz -lpng -lvorbisfile -lvorbis -logg -limagehlp -ljpeg -lwebp -lmodplug -lwinmm -lsmpeg -ldxguid ) 
 
 # Pack libraries into bundle and link executable appropriately
 if ( APPLE AND CREATE_BUNDLE )
